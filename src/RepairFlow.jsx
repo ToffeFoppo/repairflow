@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "./supabase.js";
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const T = {
@@ -761,24 +762,115 @@ function R2({ l, v, bold }) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState("");
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setLoading(true); setError("");
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setError(error.message); setLoading(false); }
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'IBM Plex Sans', sans-serif" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap'); *{box-sizing:border-box}`}</style>
+      <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:"40px 44px", width:380, boxShadow:"0 8px 32px rgba(0,0,0,.08)" }}>
+        <div style={{ marginBottom:28, textAlign:"center" }}>
+          <div style={{ fontSize:28, fontWeight:800, color:T.pink, letterSpacing:"-.5px" }}>Foppo</div>
+          <div style={{ fontSize:13, color:T.text3, marginTop:4 }}>RepairFlow — sign in to continue</div>
+        </div>
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:11, fontWeight:600, color:T.text2, marginBottom:5 }}>Email</div>
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required
+              placeholder="you@example.com" autoFocus
+              style={{ ...inp(), width:"100%", fontSize:14 }} />
+          </div>
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:11, fontWeight:600, color:T.text2, marginBottom:5 }}>Password</div>
+            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required
+              placeholder="••••••••"
+              style={{ ...inp(), width:"100%", fontSize:14 }} />
+          </div>
+          {error && (
+            <div style={{ background:T.redBg, border:`1px solid ${T.red}44`, borderRadius:7, padding:"8px 12px", fontSize:12, color:T.red, marginBottom:14 }}>
+              {error}
+            </div>
+          )}
+          <button type="submit" disabled={loading}
+            style={{ width:"100%", background:T.pink, border:"none", borderRadius:8, padding:"11px 0", color:"#fff", fontSize:14, fontWeight:700, opacity:loading?.6:1 }}>
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function RepairFlow() {
-  const [tickets,       setTickets]      = useState(INITIAL_TICKETS);
-  const [customers,     setCustomers]    = useState(INITIAL_CUSTOMERS);
-  const [parts,         setParts]        = useState(INITIAL_PARTS);
-  const [logs,          setLogs]         = useState(INITIAL_LOGS);
-  const [manualOrders,  setManualOrders] = useState([]);
-  const [allModels,     setAllModels]    = useState(null); // null = not yet fetched
-  const [view,          setView]         = useState("dashboard");
-  const [activeTicket,  setActiveTicket] = useState(null);
-  const [toasts,        setToasts]       = useState([]);
-  const [filterStatus,  setFilterStatus] = useState("all");
-  const [search,        setSearch]       = useState("");
-  const [msgTemplates,  setMsgTemplates] = useState(DEFAULT_TEMPLATES);
-  const [technicians,   setTechnicians]  = useState(SEED_TECHNICIANS);
-  const [filterTech,    setFilterTech]   = useState("all");
-  const [catalogue,     setCatalogue]    = useState(SEED_CATALOGUE);
-  const [partCategories, setPartCategories] = useState(DEFAULT_PART_CATEGORIES);
-  const [intakeLogs,    setIntakeLogs]    = useState([]);
+  // ── Auth session ────────────────────────────────────────────────────────────
+  const [session,  setSession]  = useState(undefined); // undefined = loading, null = logged out
+  const [dbReady,  setDbReady]  = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s ?? null));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const [tickets,        setTickets]       = useState([]);
+  const [customers,      setCustomers]     = useState([]);
+  const [parts,          setParts]         = useState([]);
+  const [logs,           setLogs]          = useState([]);
+  const [manualOrders,   setManualOrders]  = useState([]);
+  const [allModels,      setAllModels]     = useState(null);
+  const [view,           setView]          = useState("dashboard");
+  const [activeTicket,   setActiveTicket]  = useState(null);
+  const [toasts,         setToasts]        = useState([]);
+  const [filterStatus,   setFilterStatus]  = useState("all");
+  const [search,         setSearch]        = useState("");
+  const [msgTemplates,   setMsgTemplates]  = useState(DEFAULT_TEMPLATES);
+  const [technicians,    setTechnicians]   = useState([]);
+  const [filterTech,     setFilterTech]    = useState("all");
+  const [catalogue,      setCatalogue]     = useState([]);
+  const [partCategories, setPartCategories]= useState([]);
+  const [intakeLogs,     setIntakeLogs]    = useState([]);
+
+  // ── Load all data from Supabase once session is ready ───────────────────────
+  useEffect(() => {
+    if (!session) return;
+    async function loadAll() {
+      const [
+        { data: tix },  { data: custs }, { data: ps },
+        { data: ls },   { data: techs }, { data: cat },
+        { data: cats },  { data: il },
+      ] = await Promise.all([
+        supabase.from("tickets").select("*").order("created_at", { ascending: false }),
+        supabase.from("customers").select("*").order("name"),
+        supabase.from("parts").select("*"),
+        supabase.from("logs").select("*").order("created_at", { ascending: false }),
+        supabase.from("technicians").select("*"),
+        supabase.from("catalogue").select("*").order("name"),
+        supabase.from("part_categories").select("*").order("name"),
+        supabase.from("intake_logs").select("*").order("created_at", { ascending: false }),
+      ]);
+      if (tix)   setTickets(tix);
+      if (custs) setCustomers(custs);
+      if (ps)    setParts(ps);
+      if (ls)    setLogs(ls);
+      if (techs) setTechnicians(techs);
+      if (cat)   setCatalogue(cat.map(c => ({ ...c, compatible_models: c.compatible_models||[], compatible_categories: c.compatible_categories||[] })));
+      if (cats)  setPartCategories(cats.map(c => c.name));
+      if (il)    setIntakeLogs(il);
+      setDbReady(true);
+    }
+    loadAll();
+  }, [session]);
 
   function toast(msg, type="success") {
     const id = Date.now(); setToasts(t => [...t, { id, msg, type }]);
@@ -788,8 +880,9 @@ export default function RepairFlow() {
 
   const NOTIFY_STATUSES = ["part_arrived", "ready_for_pickup"];
 
-  function updateTicketStatus(tid, newStatus) {
+  async function updateTicketStatus(tid, newStatus) {
     setTickets(ts => ts.map(t => t.id===tid ? { ...t, status:newStatus } : t));
+    await supabase.from("tickets").update({ status: newStatus }).eq("id", tid);
     const NOTIFY = ["part_arrived","ready_for_pickup"];
     if (NOTIFY.includes(newStatus)) {
       const ticket = tickets.find(t => t.id===tid);
@@ -797,10 +890,12 @@ export default function RepairFlow() {
       if (cust) {
         const tmpl = newStatus==="ready_for_pickup" ? "ready_for_pickup" : "part_arrived";
         const channels = [...(cust.email?["email"]:[]), ...(cust.sms_opt_in?["sms"]:[])];
-        channels.forEach(ch => {
+        channels.forEach(async ch => {
           const ticket = tickets.find(t => t.id===tid);
           const msg = buildMessage(tmpl, ch, cust, ticket, msgTemplates);
-          setLogs(ls => [...ls, { id:genId("l"), ticket_id:tid, customer_id:cust.id, channel:ch, template_key:tmpl, message:msg, sent_at:new Date().toISOString(), status:"sent" }]);
+          const logEntry = { id:genId("l"), ticket_id:tid, customer_id:cust.id, channel:ch, template_key:tmpl, message:msg, sent_at:new Date().toISOString(), status:"sent" };
+          setLogs(ls => [...ls, logEntry]);
+          await supabase.from("logs").insert(logEntry);
         });
         const icons = channels.map(c=>c==="email"?"📧":"📱").join(" ");
         toast(`${icons} Notification → ${cust.name}  (${newStatus==="ready_for_pickup"?"Ready for pickup":"Part arrived"})`, "success");
@@ -810,52 +905,69 @@ export default function RepairFlow() {
     toast(`Siirretty: "${getStatus(newStatus).label}"`);
   }
 
-  function deleteTicket(tid) {
+  async function deleteTicket(tid) {
     setTickets(ts => ts.filter(t => t.id!==tid));
     setParts(ps => ps.filter(p => p.ticket_id!==tid));
     setLogs(ls => ls.filter(l => l.ticket_id!==tid));
     if (activeTicket===tid) { setActiveTicket(null); setView("dashboard"); }
+    await supabase.from("tickets").delete().eq("id", tid);
     toast("Ticket deleted", "warn");
   }
 
-  function updatePartStatus(partId, newStatus) {
+  async function updatePartStatus(partId, newStatus) {
     const part   = parts.find(p => p.id === partId);
     if (!part) return;
     const ticket = tickets.find(t => t.id === part.ticket_id);
     const cust   = ticket ? customers.find(c => c.id === ticket.customer_id) : null;
 
-    // Update the part itself first
     const updatedParts = parts.map(p =>
       p.id === partId ? { ...p, part_status: newStatus, arrived_at: newStatus==="arrived" ? new Date().toISOString() : p.arrived_at } : p
     );
     setParts(updatedParts);
+    await supabase.from("parts").update({ part_status: newStatus }).eq("id", partId);
 
     if (newStatus === "arrived" && ticket && cust) {
-      // Check if ALL parts for this ticket are now arrived (after this update)
       const ticketParts = updatedParts.filter(p => p.ticket_id === ticket.id);
       const allArrived  = ticketParts.every(p => p.part_status === "arrived");
       const remaining   = ticketParts.filter(p => p.part_status !== "arrived").length;
 
       if (allArrived) {
-        // All parts in — advance ticket and notify customer
         setTickets(ts => ts.map(t => t.id === ticket.id ? { ...t, status: "part_arrived" } : t));
+        await supabase.from("tickets").update({ status: "part_arrived" }).eq("id", ticket.id);
         const tmpl = part.is_accessory ? "accessory_arrived" : "part_arrived";
         const channels = [];
         if (cust.email) channels.push("email");
         if (cust.sms_opt_in) channels.push("sms");
         if (!channels.length) channels.push("email");
-        channels.forEach(ch => {
+        channels.forEach(async ch => {
           const msg = buildMessage(tmpl, ch, cust, ticket, msgTemplates);
-          setLogs(ls => [...ls, { id:genId("l"), ticket_id:ticket.id, customer_id:cust.id, channel:ch, template_key:tmpl, message:msg, sent_at:new Date().toISOString(), status:"sent" }]);
+          const logEntry = { id:genId("l"), ticket_id:ticket.id, customer_id:cust.id, channel:ch, template_key:tmpl, message:msg, sent_at:new Date().toISOString(), status:"sent" };
+          setLogs(ls => [...ls, logEntry]);
+          await supabase.from("logs").insert(logEntry);
         });
         const icons = channels.map(c => c==="email"?"📧":"📱").join(" ");
         toast(`${icons} All parts arrived — notified ${cust.name}`, "success");
       } else {
-        // Still waiting on other parts — just confirm this one arrived
         toast(`Part marked arrived · ${remaining} part${remaining!==1?"s":""} still pending`);
       }
     }
   }
+
+  // ── Supabase db helpers (passed to child views) ─────────────────────────────
+  const db = {
+    // Tickets
+    async saveTicket(t)   { await supabase.from("tickets").upsert(t); },
+    async saveCustomer(c) { await supabase.from("customers").upsert(c); },
+    async savePart(p)     { await supabase.from("parts").upsert(p); },
+    async deletePart(id)  { await supabase.from("parts").delete().eq("id", id); },
+    async saveCatalogueItem(c) { await supabase.from("catalogue").upsert(c); },
+    async deleteCatalogueItem(id) { await supabase.from("catalogue").delete().eq("id", id); },
+    async saveTechnician(t)   { await supabase.from("technicians").upsert(t); },
+    async deleteTechnician(id){ await supabase.from("technicians").delete().eq("id", id); },
+    async savePartCategory(name) { await supabase.from("part_categories").upsert({ name }); },
+    async deletePartCategory(name){ await supabase.from("part_categories").delete().eq("name", name); },
+    async saveIntakeLog(l) { await supabase.from("intake_logs").insert(l); },
+  };
 
   const pendingCount = parts.filter(p => p.part_status==="pending").length + manualOrders.filter(m => m.status==="pending").length;
   const filteredTickets = tickets.filter(t => {
@@ -865,6 +977,22 @@ export default function RepairFlow() {
     const mt = filterTech==="all" || t.technician_id===filterTech || (filterTech==="unassigned" && !t.technician_id);
     return ms && mt && (!q || t.id.toLowerCase().includes(q) || t.device_model?.toLowerCase().includes(q) || (c && c.name.toLowerCase().includes(q)) || t.device_manufacturer?.toLowerCase().includes(q));
   });
+
+  // ── Auth gates ───────────────────────────────────────────────────────────────
+  if (session === undefined) return (
+    <div style={{ minHeight:"100vh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'IBM Plex Sans',sans-serif" }}>
+      <div style={{ fontSize:14, color:T.text3 }}>Loading…</div>
+    </div>
+  );
+  if (!session) return <LoginScreen />;
+  if (!dbReady) return (
+    <div style={{ minHeight:"100vh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'IBM Plex Sans',sans-serif" }}>
+      <div style={{ textAlign:"center" }}>
+        <div style={{ fontSize:22, fontWeight:800, color:T.pink, marginBottom:8 }}>Foppo</div>
+        <div style={{ fontSize:13, color:T.text3 }}>Loading data…</div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ display:"flex", height:"100vh", background:T.bg, color:T.text, fontFamily:"'IBM Plex Sans', sans-serif", overflow:"hidden" }}>
@@ -892,19 +1020,22 @@ export default function RepairFlow() {
             <button onClick={() => setView("new_ticket")} style={{ background:T.pink, color:"#fff", border:"none", borderRadius:7, padding:"7px 18px", fontWeight:700, fontSize:13 }}>
               + New ticket
             </button>
+            <button onClick={() => supabase.auth.signOut()} style={{ background:T.surface2, color:T.text2, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 14px", fontWeight:600, fontSize:12 }}>
+              Sign out
+            </button>
           </div>
         </div>
 
         <div style={{ flex:1, overflow:"auto" }}>
           {view==="dashboard"   && <DashboardView tickets={filteredTickets} customers={customers} parts={parts} openTicket={openTicket} filterStatus={filterStatus} setFilterStatus={setFilterStatus} updateTicketStatus={updateTicketStatus} deleteTicket={deleteTicket} technicians={technicians} filterTech={filterTech} setFilterTech={setFilterTech} />}
-          {view==="ticket"      && <TicketView ticketId={activeTicket} tickets={tickets} customers={customers} parts={parts} logs={logs} setTickets={setTickets} setParts={setParts} updateTicketStatus={updateTicketStatus} updatePartStatus={updatePartStatus} deleteTicket={deleteTicket} toast={toast} technicians={technicians} catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} />}
-          {view==="parts_order" && <PartsOrderView tickets={tickets} setTickets={setTickets} customers={customers} parts={parts} updatePartStatus={updatePartStatus} manualOrders={manualOrders} setManualOrders={setManualOrders} toast={toast} catalogue={catalogue} setCatalogue={setCatalogue} />}
+          {view==="ticket"      && <TicketView ticketId={activeTicket} tickets={tickets} customers={customers} parts={parts} logs={logs} setTickets={setTickets} setParts={setParts} updateTicketStatus={updateTicketStatus} updatePartStatus={updatePartStatus} deleteTicket={deleteTicket} toast={toast} technicians={technicians} catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} db={db} />}
+          {view==="parts_order" && <PartsOrderView tickets={tickets} setTickets={setTickets} customers={customers} parts={parts} updatePartStatus={updatePartStatus} manualOrders={manualOrders} setManualOrders={setManualOrders} toast={toast} catalogue={catalogue} setCatalogue={setCatalogue} db={db} />}
           {view==="templates"   && <TemplatesView msgTemplates={msgTemplates} setMsgTemplates={setMsgTemplates} />}
-          {view==="settings"    && <SettingsView technicians={technicians} setTechnicians={setTechnicians} toast={toast} partCategories={partCategories} setPartCategories={setPartCategories} catalogue={catalogue} setCatalogue={setCatalogue} />}
-          {view==="catalogue"   && <CatalogueView catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} toast={toast} parts={parts} partCategories={partCategories} setPartCategories={setPartCategories} />}
-          {view==="stock_intake" && <StockIntakeView catalogue={catalogue} setCatalogue={setCatalogue} partCategories={partCategories} intakeLogs={intakeLogs} setIntakeLogs={setIntakeLogs} toast={toast} allModels={allModels} setAllModels={setAllModels} />}
+          {view==="settings"    && <SettingsView technicians={technicians} setTechnicians={setTechnicians} toast={toast} partCategories={partCategories} setPartCategories={setPartCategories} catalogue={catalogue} setCatalogue={setCatalogue} db={db} />}
+          {view==="catalogue"   && <CatalogueView catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} toast={toast} parts={parts} partCategories={partCategories} setPartCategories={setPartCategories} db={db} />}
+          {view==="stock_intake" && <StockIntakeView catalogue={catalogue} setCatalogue={setCatalogue} partCategories={partCategories} intakeLogs={intakeLogs} setIntakeLogs={setIntakeLogs} toast={toast} allModels={allModels} setAllModels={setAllModels} db={db} />}
           {view==="customers"   && <CustomersView customers={customers} tickets={tickets} openTicket={openTicket} />}
-          {view==="new_ticket"  && <NewTicketView customers={customers} setCustomers={setCustomers} tickets={tickets} setTickets={setTickets} toast={toast} setView={setView} setActiveTicket={setActiveTicket} allModels={allModels} setAllModels={setAllModels} />}
+          {view==="new_ticket"  && <NewTicketView customers={customers} setCustomers={setCustomers} tickets={tickets} setTickets={setTickets} toast={toast} setView={setView} setActiveTicket={setActiveTicket} allModels={allModels} setAllModels={setAllModels} db={db} />}
           {view==="logs"        && <LogsView logs={logs} tickets={tickets} customers={customers} />}
         </div>
       </div>
@@ -943,7 +1074,7 @@ function CatPartRow({ part, onAdd, available: avail }) {
 // ─── CATALOGUE VIEW ────────────────────────────────────────────────────────────
 const DEFAULT_PART_CATEGORIES = ["Screens","Batteries","Ports & Connectors","Cameras","Keyboards & Cases","Adhesives & Kits","Tools & Hardware","Other"];
 
-function CatalogueView({ catalogue, setCatalogue, allModels, setAllModels, toast, parts, partCategories, setPartCategories }) {
+function CatalogueView({ catalogue, setCatalogue, allModels, setAllModels, toast, parts, partCategories, setPartCategories, db }) {
   const DEVICE_CATEGORIES = ["Phone","Tablet","Computer","Other"];
   const [search,      setSearch]      = useState("");
   const [editId,      setEditId]      = useState(null);
@@ -968,37 +1099,47 @@ function CatalogueView({ catalogue, setCatalogue, allModels, setAllModels, toast
   function startEdit(p)  { setForm({ ...p, cost:String(p.cost), stock_qty:String(p.stock_qty), min_stock:String(p.min_stock) }); setEditId(p.id); setShowForm(true); setModelSearch(""); }
   function cancel()      { setShowForm(false); setEditId(null); setForm(blank); setModelSearch(""); }
 
-  function save() {
+  async function save() {
     if (!form.name.trim()) { toast("Part name required", "error"); return; }
-    // ── SKU duplicate check ──────────────────────────────────────────────
     if (form.sku.trim()) {
       const skuLower = form.sku.trim().toLowerCase();
       const duplicate = catalogue.find(c => c.sku.toLowerCase() === skuLower && c.id !== editId);
       if (duplicate) { toast(`SKU "${form.sku.trim()}" is already used by "${duplicate.name}"`, "error"); return; }
     }
-    const entry = { ...form, cost:parseFloat(form.cost)||0, stock_qty:parseInt(form.stock_qty)||0, min_stock:parseInt(form.min_stock)||0 };
+    const entry = { ...form, cost:parseFloat(form.cost)||0, avg_cost:parseFloat(form.avg_cost)||parseFloat(form.cost)||0, stock_qty:parseInt(form.stock_qty)||0, min_stock:parseInt(form.min_stock)||0 };
     if (editId) {
       setCatalogue(cs => cs.map(c => c.id===editId ? entry : c));
+      await db.saveCatalogueItem(entry);
       toast("Part updated");
     } else {
-      setCatalogue(cs => [...cs, { ...entry, id:genId("cat") }]);
+      const newEntry = { ...entry, id:genId("cat") };
+      setCatalogue(cs => [...cs, newEntry]);
+      await db.saveCatalogueItem(newEntry);
       toast("Part added to inventory");
     }
     cancel();
   }
 
-  function remove(id) { setCatalogue(cs => cs.filter(c => c.id!==id)); toast("Part removed","warn"); }
-
-  function adjustStock(id, delta) {
-    setCatalogue(cs => cs.map(c => c.id===id ? { ...c, stock_qty: Math.max(0, c.stock_qty + delta) } : c));
+  async function remove(id) {
+    setCatalogue(cs => cs.filter(c => c.id!==id));
+    await db.deleteCatalogueItem(id);
+    toast("Part removed","warn");
   }
 
-  function addPartCategory() {
+  async function adjustStock(id, delta) {
+    const updated = catalogue.map(c => c.id===id ? { ...c, stock_qty: Math.max(0, c.stock_qty + delta) } : c);
+    setCatalogue(updated);
+    const item = updated.find(c => c.id===id);
+    if (item) await db.saveCatalogueItem(item);
+  }
+
+  async function addPartCategory() {
     const v = newCatInput.trim();
     if (!v) return;
     if (partCategories.includes(v)) { toast("Category already exists","error"); return; }
     setPartCategories(cats => [...cats, v]);
     setNewCatInput("");
+    await db.savePartCategory(v);
     toast(`Category "${v}" added`);
   }
 
@@ -1295,7 +1436,7 @@ function CatalogueView({ catalogue, setCatalogue, allModels, setAllModels, toast
 }
 
 // ─── STOCK INTAKE ─────────────────────────────────────────────────────────────
-function StockIntakeView({ catalogue, setCatalogue, partCategories, intakeLogs, setIntakeLogs, toast, allModels, setAllModels }) {
+function StockIntakeView({ catalogue, setCatalogue, partCategories, intakeLogs, setIntakeLogs, toast, allModels, setAllModels, db }) {
   const DEVICE_CATEGORIES = ["Phone","Tablet","Computer","Other"];
 
   useEffect(() => {
@@ -1331,7 +1472,7 @@ function StockIntakeView({ catalogue, setCatalogue, partCategories, intakeLogs, 
   }
 
   // ── Save intake for existing catalogue item ───────────────────────────────
-  function saveIntake() {
+  async function saveIntake() {
     const addedQty   = parseInt(intakeForm.qty)   || 0;
     const buyInPrice = parseFloat(intakeForm.buyIn) || 0;
     if (!selected)         { toast("No item selected","error"); return; }
@@ -1340,32 +1481,30 @@ function StockIntakeView({ catalogue, setCatalogue, partCategories, intakeLogs, 
 
     const newAvg = calcWAC(selected.stock_qty, selected.avg_cost ?? selected.cost, addedQty, buyInPrice);
     const newQty = selected.stock_qty + addedQty;
+    const updatedItem = { ...selected, stock_qty: newQty, avg_cost: Math.round(newAvg * 10000) / 10000 };
 
-    setCatalogue(cs => cs.map(c => c.id === selected.id
-      ? { ...c, stock_qty: newQty, avg_cost: Math.round(newAvg * 10000) / 10000 }
-      : c
-    ));
+    setCatalogue(cs => cs.map(c => c.id === selected.id ? updatedItem : c));
+    await db.saveCatalogueItem(updatedItem);
 
     const log = {
       id: genId("il"), catalogue_id: selected.id, part_name: selected.name,
       sku: selected.sku, added_qty: addedQty, buy_in: buyInPrice,
       new_avg: Math.round(newAvg * 10000) / 10000, new_total: newQty,
-      date: new Date().toISOString(),
+      created_at: new Date().toISOString(),
     };
     setIntakeLogs(ls => [log, ...ls]);
+    await db.saveIntakeLog(log);
     toast(`✓ ${selected.name} — +${addedQty} units @ ${fmtEur(buyInPrice)} · new avg ${fmtEur(log.new_avg)}`);
     setSelected(null); setIntakeForm(INTAKE_BLANK); setSearch(""); setMode("log");
   }
 
-  // ── Save brand-new part + initial intake ─────────────────────────────────
-  function saveNewPart() {
+  async function saveNewPart() {
     if (!newForm.name.trim()) { toast("Part name required","error"); return; }
     const addedQty   = parseInt(newForm.qty)    || 0;
     const buyInPrice = parseFloat(newForm.buyIn) || 0;
     if (addedQty <= 0)   { toast("Quantity must be > 0","error"); return; }
     if (buyInPrice <= 0) { toast("Buy-in price must be > 0","error"); return; }
 
-    // SKU uniqueness check
     if (newForm.sku.trim()) {
       const dup = catalogue.find(c => c.sku.toLowerCase() === newForm.sku.trim().toLowerCase());
       if (dup) { setSkuError(`SKU already used by "${dup.name}"`); return; }
@@ -1381,14 +1520,16 @@ function StockIntakeView({ catalogue, setCatalogue, partCategories, intakeLogs, 
       compatible_models: newForm.compatible_models, compatible_categories: newForm.compatible_categories,
     };
     setCatalogue(cs => [...cs, entry]);
+    await db.saveCatalogueItem(entry);
 
     const log = {
       id: genId("il"), catalogue_id: entry.id, part_name: entry.name,
       sku: entry.sku, added_qty: addedQty, buy_in: buyInPrice,
       new_avg: buyInPrice, new_total: addedQty,
-      date: new Date().toISOString(),
+      created_at: new Date().toISOString(),
     };
     setIntakeLogs(ls => [log, ...ls]);
+    await db.saveIntakeLog(log);
     toast(`✓ "${entry.name}" created and ${addedQty} units received`);
     setNewForm(NEW_BLANK); setMode("log");
   }
@@ -1800,14 +1941,15 @@ function StockIntakeView({ catalogue, setCatalogue, partCategories, intakeLogs, 
 // ─── SETTINGS (Technicians) ───────────────────────────────────────────────────
 const TECH_COLORS = ["#D4175A","#1A5FAB","#1F8A55","#7340AB","#C47A10","#C0252A","#0891B2","#9333EA","#EA580C","#0D9488"];
 
-function SettingsView({ technicians, setTechnicians, toast, partCategories, setPartCategories, catalogue, setCatalogue }) {
+function SettingsView({ technicians, setTechnicians, toast, partCategories, setPartCategories, catalogue, setCatalogue, db }) {
   const blank = { name:"", initials:"", color:TECH_COLORS[0] };
   const [form,    setForm]    = useState(blank);
   const [catInput, setCatInput] = useState("");
 
-  function removePartCategory(cat) {
+  async function removePartCategory(cat) {
     setPartCategories(cs => cs.filter(c => c !== cat));
     setCatalogue(cs => cs.map(c => c.part_category===cat ? {...c, part_category:""} : c));
+    await db.deletePartCategory(cat);
     toast(`Category "${cat}" removed`, "warn");
   }
   const [editId,  setEditId]  = useState(null);
@@ -1823,14 +1965,18 @@ function SettingsView({ technicians, setTechnicians, toast, partCategories, setP
     setShowAdd(true);
   }
 
-  function save() {
+  async function save() {
     if (!form.name.trim()) { toast("Name required","error"); return; }
     const initials = form.initials.trim() || autoInitials(form.name);
     if (editId) {
-      setTechnicians(ts => ts.map(t => t.id===editId ? {...t, name:form.name.trim(), initials, color:form.color} : t));
+      const updated = { id:editId, name:form.name.trim(), initials, color:form.color };
+      setTechnicians(ts => ts.map(t => t.id===editId ? updated : t));
+      await db.saveTechnician(updated);
       toast("Technician updated");
     } else {
-      setTechnicians(ts => [...ts, { id:genId("tech"), name:form.name.trim(), initials, color:form.color }]);
+      const newTech = { id:genId("tech"), name:form.name.trim(), initials, color:form.color };
+      setTechnicians(ts => [...ts, newTech]);
+      await db.saveTechnician(newTech);
       toast("Technician added");
     }
     setForm(blank); setEditId(null); setShowAdd(false);
@@ -1838,8 +1984,9 @@ function SettingsView({ technicians, setTechnicians, toast, partCategories, setP
 
   function cancel() { setForm(blank); setEditId(null); setShowAdd(false); }
 
-  function remove(id) {
+  async function remove(id) {
     setTechnicians(ts => ts.filter(t => t.id!==id));
+    await db.deleteTechnician(id);
     toast("Technician removed","warn");
   }
 
@@ -2355,7 +2502,7 @@ function TicketRow({ ticket, customers, parts, onOpen, onStatusChange, onDelete,
 }
 
 // ─── TICKET DETAIL ────────────────────────────────────────────────────────────
-function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, setParts, updateTicketStatus, updatePartStatus, deleteTicket, toast, technicians, catalogue, setCatalogue, allModels, setAllModels }) {
+function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, setParts, updateTicketStatus, updatePartStatus, deleteTicket, toast, technicians, catalogue, setCatalogue, allModels, setAllModels, db }) {
   const ticket = tickets.find(t => t.id===ticketId);
   const cust   = ticket ? customers.find(c => c.id===ticket.customer_id) : null;
   const tParts = parts.filter(p => p.ticket_id===ticketId);
@@ -2372,26 +2519,32 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
   if (!ticket) return <div style={{ padding:40, color:T.text2 }}>Ticket not found.</div>;
   const si = STATUSES.findIndex(s => s.key===ticket.status);
 
-  function addNote() {
+  async function addNote() {
     if (!newNote.trim()) return;
-    setTickets(ts => ts.map(t => t.id===ticketId ? { ...t, technician_notes:t.technician_notes+(t.technician_notes?"\n":"")+`[${new Date().toLocaleTimeString("fi-FI")}] ${newNote}` } : t));
+    const updated = tickets.map(t => t.id===ticketId ? { ...t, technician_notes:t.technician_notes+(t.technician_notes?"\n":"")+`[${new Date().toLocaleTimeString("fi-FI")}] ${newNote}` } : t);
+    setTickets(updated);
+    const t = updated.find(t => t.id===ticketId);
+    await db.saveTicket(t);
     setNewNote(""); toast("Note added");
   }
-  function addPartFromCatalogue(catPart, qty) {
+  async function addPartFromCatalogue(catPart, qty) {
     const q = parseInt(qty) || 1;
-    // Compute current reserved for this catalogue part (excluding this ticket — we're about to add)
     const alreadyReserved = (parts||[]).filter(p => p.catalogue_id===catPart.id && (p.part_status==="pending"||p.part_status==="ordered")).reduce((s,p)=>s+(p.qty||1),0);
     const availableNow = catPart.stock_qty - alreadyReserved;
     const inStock = availableNow >= q;
     const partStatus = inStock ? "arrived" : "pending";
-    setParts(ps => [...ps, {
+    const newP = {
       id: genId("p"), ticket_id: ticketId,
       part_name: catPart.name, supplier_sku: catPart.sku,
       qty: q, cost: catPart.avg_cost ?? catPart.cost, part_status: partStatus,
       is_accessory: false, catalogue_id: catPart.id,
-    }]);
+    };
+    setParts(ps => [...ps, newP]);
+    await db.savePart(newP);
     if (inStock) {
-      setCatalogue(cs => cs.map(c => c.id===catPart.id ? {...c, stock_qty: c.stock_qty - q} : c));
+      const updatedCat = { ...catPart, stock_qty: catPart.stock_qty - q };
+      setCatalogue(cs => cs.map(c => c.id===catPart.id ? updatedCat : c));
+      await db.saveCatalogueItem(updatedCat);
       toast(`✓ ${catPart.name} — pulled from stock (${availableNow - q} left)`);
     } else {
       toast(`${catPart.name} added — needs ordering (available: ${availableNow})`);
@@ -2399,14 +2552,19 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
     setCatSearch(""); setShowAddPart(false);
   }
 
-  function addPart() {
+  async function addPart() {
     if (!newPart.part_name.trim()) return;
-    setParts(ps => [...ps, { id:genId("p"), ticket_id:ticketId, ...newPart, qty:parseInt(newPart.qty)||1, cost:parseFloat(newPart.cost)||0, part_status:"pending" }]);
+    const newP = { id:genId("p"), ticket_id:ticketId, ...newPart, qty:parseInt(newPart.qty)||1, cost:parseFloat(newPart.cost)||0, part_status:"pending" };
+    setParts(ps => [...ps, newP]);
+    await db.savePart(newP);
     setNewPart({ part_name:"", supplier_sku:"", qty:1, cost:"", is_accessory:false });
     setShowAddPart(false); toast("Part added");
   }
 
-  function save(field, val) { setTickets(ts => ts.map(t => t.id===ticketId ? { ...t, [field]:val } : t)); }
+  async function save(field, val) {
+    setTickets(ts => ts.map(t => t.id===ticketId ? { ...t, [field]:val } : t));
+    await supabase.from("tickets").update({ [field]: val }).eq("id", ticketId);
+  }
 
   const isAcc     = ticket.type === "accessory";
   const accentC   = isAcc ? T.purple : T.pink;
@@ -2465,7 +2623,7 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
             return (
               <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                 {tech && <span style={{ width:26, height:26, borderRadius:"50%", background:tech.color, color:"#fff", fontSize:10, fontWeight:800, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{tech.initials}</span>}
-                <select value={ticket.technician_id||""} onChange={e => setTickets(ts => ts.map(t => t.id===ticketId ? {...t, technician_id:e.target.value||undefined} : t))}
+                <select value={ticket.technician_id||""} onChange={async e => { const val = e.target.value||null; setTickets(ts => ts.map(t => t.id===ticketId ? {...t, technician_id:val} : t)); await supabase.from("tickets").update({ technician_id: val }).eq("id", ticketId); }}
                   style={{ background:tech?tech.color+"18":T.surface2, border:`1px solid ${tech?tech.color+"66":T.border}`, borderRadius:7, color:tech?tech.color:T.text2, fontSize:12, fontWeight:600, padding:"5px 8px", cursor:"pointer" }}>
                   <option value="">Unassigned</option>
                   {(technicians||[]).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -2656,6 +2814,7 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
                     toast("Part removed", "warn");
                   }
                   setParts(ps => ps.filter(x => x.id !== p.id));
+                  await db.deletePart(p.id);
                 }}
                 title="Remove part"
                 style={{ background:"none", border:`1px solid ${T.border}`, borderRadius:5, padding:"3px 7px", color:T.red, fontSize:11, flexShrink:0 }}>✕</button>
@@ -3023,7 +3182,7 @@ const ACC_PRESETS = [
   { key:"ready_for_pickup", label:"Ready for pickup",   icon:"🛍", desc:"Customer can collect now"         },
 ];
 
-function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, setView, setActiveTicket, allModels, setAllModels }) {
+function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, setView, setActiveTicket, allModels, setAllModels, db }) {
   // ── shared state ──────────────────────────────────────────────────────────
   const [ticketType,  setTicketType]  = useState("");       // "repair" | "accessory"
   const [isNew,       setIsNew]       = useState(false);
@@ -3053,24 +3212,25 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
   const selectedRepair = REPAIR_TYPES.find(r => r.value === repairType);
 
   // ── helpers ───────────────────────────────────────────────────────────────
-  function resolveCustomer() {
+  async function resolveCustomer() {
     let fid = custId;
     if (isNew) {
       if (!nc.name.trim()) { toast("Customer name is required", "error"); return null; }
       const n = { id:genId("c"), ...nc };
       setCustomers(cs => [...cs, n]);
+      await db.saveCustomer(n);
       fid = n.id;
     }
     if (!fid) { toast("Select a customer", "error"); return null; }
     return fid;
   }
 
-  function submitRepair() {
+  async function submitRepair() {
     const model = device.model || device.customModel;
     if (!device.category)  { toast("Select a device category", "error"); return; }
     if (!model)            { toast("Select or enter a device model", "error"); return; }
     if (!repairType)       { toast("Select a repair type", "error"); return; }
-    const fid = resolveCustomer(); if (!fid) return;
+    const fid = await resolveCustomer(); if (!fid) return;
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : (device.manufacturer || "Other");
     const finalIssue  = issue.trim() || REPAIR_TYPES.find(r=>r.value===repairType)?.label || "";
     const tid = `TKT-${String(tickets.length + 47).padStart(4,"0")}`;
@@ -3085,13 +3245,14 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
       status: initStatus, technician_notes: "", created_at: new Date().toISOString(),
     };
     setTickets(ts => [...ts, nt]); setActiveTicket(tid);
+    await db.saveTicket(nt);
     toast(`Ticket ${tid} created! (${getStatus(initStatus).label})`); setView("ticket");
   }
 
-  function submitAccessory() {
+  async function submitAccessory() {
     if (!accItem.trim()) { toast("Item description is required", "error"); return; }
     const model = device.model || device.customModel;
-    const fid = resolveCustomer(); if (!fid) return;
+    const fid = await resolveCustomer(); if (!fid) return;
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : device.manufacturer;
     const tid = `TKT-${String(tickets.length + 47).padStart(4,"0")}`;
     const firstItem = { id: genId("ai"), item: accItem.trim(), color: accColor.trim(), qty: parseInt(accQty)||1, price_incl_vat: ap, status: "pending" };
@@ -3110,6 +3271,7 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
       status: initStatus, technician_notes: "", created_at: new Date().toISOString(),
     };
     setTickets(ts => [...ts, nt]); setActiveTicket(tid);
+    await db.saveTicket(nt);
     toast(`Accessory order ${tid} created!`); setView("ticket");
   }
 
@@ -3638,3 +3800,5 @@ function AccOrderDetail({ ticket, ticketId, cust, tLogs, setTickets, newNote, se
           </div>
   );
 }
+
+
