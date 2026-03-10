@@ -844,14 +844,18 @@ export default function RepairFlow() {
   const [partCategories, setPartCategories]= useState([]);
   const [intakeLogs,     setIntakeLogs]    = useState([]);
 
+  const hasLoadedRef = useRef(false);
+
   // ── Load all data from Supabase once session is ready ───────────────────────
   useEffect(() => {
     if (!session?.user?.id) return;
+    if (hasLoadedRef.current) return; // never reload after first successful load
+    hasLoadedRef.current = true;
     async function loadAll() {
       const [
         { data: tix },  { data: custs }, { data: ps },
         { data: ls },   { data: techs }, { data: cat },
-        { data: cats },  { data: il },
+        { data: cats },  { data: il }, { data: settings },
       ] = await Promise.all([
         supabase.from("tickets").select("*").order("created_at", { ascending: false }),
         supabase.from("customers").select("*").order("name"),
@@ -861,6 +865,7 @@ export default function RepairFlow() {
         supabase.from("catalogue").select("*").order("name"),
         supabase.from("part_categories").select("*").order("name"),
         supabase.from("intake_logs").select("*").order("created_at", { ascending: false }),
+        supabase.from("settings").select("*"),
       ]);
       if (tix)   setTickets(tix);
       if (custs) setCustomers(custs);
@@ -870,10 +875,14 @@ export default function RepairFlow() {
       if (cat)   setCatalogue(cat.map(c => ({ ...c, compatible_models: c.compatible_models||[], compatible_categories: c.compatible_categories||[] })));
       if (cats)  setPartCategories(cats.map(c => c.name));
       if (il)    setIntakeLogs(il);
+      // Load persisted message templates if they exist
+      if (settings) {
+        const tmplRow = settings.find(s => s.key === "msg_templates");
+        if (tmplRow?.value) setMsgTemplates({ ...DEFAULT_TEMPLATES, ...tmplRow.value });
+      }
       setDbReady(true);
     }
     loadAll();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
   function toast(msg, type="success") {
@@ -959,18 +968,18 @@ export default function RepairFlow() {
 
   // ── Supabase db helpers (passed to child views) ─────────────────────────────
   const db = {
-    // Tickets
-    async saveTicket(t)   { await supabase.from("tickets").upsert(t); },
-    async saveCustomer(c) { await supabase.from("customers").upsert(c); },
-    async savePart(p)     { await supabase.from("parts").upsert(p); },
-    async deletePart(id)  { await supabase.from("parts").delete().eq("id", id); },
-    async saveCatalogueItem(c) { await supabase.from("catalogue").upsert(c); },
-    async deleteCatalogueItem(id) { await supabase.from("catalogue").delete().eq("id", id); },
-    async saveTechnician(t)   { await supabase.from("technicians").upsert(t); },
-    async deleteTechnician(id){ await supabase.from("technicians").delete().eq("id", id); },
-    async savePartCategory(name) { await supabase.from("part_categories").upsert({ name }); },
-    async deletePartCategory(name){ await supabase.from("part_categories").delete().eq("name", name); },
-    async saveIntakeLog(l) { await supabase.from("intake_logs").insert(l); },
+    async saveTicket(t)   { const {error} = await supabase.from("tickets").upsert(t); if(error) console.error("saveTicket",error); },
+    async saveCustomer(c) { const {error} = await supabase.from("customers").upsert(c); if(error) console.error("saveCustomer",error); },
+    async savePart(p)     { const {error} = await supabase.from("parts").upsert(p); if(error) console.error("savePart",error); },
+    async deletePart(id)  { const {error} = await supabase.from("parts").delete().eq("id",id); if(error) console.error("deletePart",error); },
+    async saveCatalogueItem(c) { const {error} = await supabase.from("catalogue").upsert(c); if(error) console.error("saveCatalogueItem",error); },
+    async deleteCatalogueItem(id) { const {error} = await supabase.from("catalogue").delete().eq("id",id); if(error) console.error("deleteCatalogueItem",error); },
+    async saveTechnician(t)   { const {error} = await supabase.from("technicians").upsert(t); if(error) console.error("saveTechnician",error); },
+    async deleteTechnician(id){ const {error} = await supabase.from("technicians").delete().eq("id",id); if(error) console.error("deleteTechnician",error); },
+    async savePartCategory(name) { const {error} = await supabase.from("part_categories").upsert({name}); if(error) console.error("savePartCategory",error); },
+    async deletePartCategory(name){ const {error} = await supabase.from("part_categories").delete().eq("name",name); if(error) console.error("deletePartCategory",error); },
+    async saveIntakeLog(l) { const {error} = await supabase.from("intake_logs").insert(l); if(error) console.error("saveIntakeLog",error); },
+    async saveSetting(key, value) { const {error} = await supabase.from("settings").upsert({ key, value }); if(error) console.error("saveSetting",error); },
   };
 
   const pendingCount = parts.filter(p => p.part_status==="pending").length + manualOrders.filter(m => m.status==="pending").length;
@@ -1035,8 +1044,8 @@ export default function RepairFlow() {
           {view==="dashboard"   && <DashboardView tickets={filteredTickets} customers={customers} parts={parts} openTicket={openTicket} filterStatus={filterStatus} setFilterStatus={setFilterStatus} updateTicketStatus={updateTicketStatus} deleteTicket={deleteTicket} technicians={technicians} filterTech={filterTech} setFilterTech={setFilterTech} />}
           {view==="ticket"      && <TicketView ticketId={activeTicket} tickets={tickets} customers={customers} parts={parts} logs={logs} setTickets={setTickets} setParts={setParts} updateTicketStatus={updateTicketStatus} updatePartStatus={updatePartStatus} deleteTicket={deleteTicket} toast={toast} technicians={technicians} catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} db={db} />}
           {view==="parts_order" && <PartsOrderView tickets={tickets} setTickets={setTickets} customers={customers} parts={parts} updatePartStatus={updatePartStatus} manualOrders={manualOrders} setManualOrders={setManualOrders} toast={toast} catalogue={catalogue} setCatalogue={setCatalogue} db={db} />}
-          {view==="templates"   && <TemplatesView msgTemplates={msgTemplates} setMsgTemplates={setMsgTemplates} />}
-          {view==="settings"    && <SettingsView technicians={technicians} setTechnicians={setTechnicians} toast={toast} partCategories={partCategories} setPartCategories={setPartCategories} catalogue={catalogue} setCatalogue={setCatalogue} db={db} />}
+          {view==="templates"   && <TemplatesView msgTemplates={msgTemplates} setMsgTemplates={setMsgTemplates} db={db} />}
+          {view==="settings"    && <SettingsView technicians={technicians} setTechnicians={setTechnicians} toast={toast} partCategories={partCategories} setPartCategories={setPartCategories} catalogue={catalogue} setCatalogue={setCatalogue} db={db} tickets={tickets} customers={customers} parts={parts} intakeLogs={intakeLogs} logs={logs} />}
           {view==="catalogue"   && <CatalogueView catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} toast={toast} parts={parts} partCategories={partCategories} setPartCategories={setPartCategories} db={db} />}
           {view==="stock_intake" && <StockIntakeView catalogue={catalogue} setCatalogue={setCatalogue} partCategories={partCategories} intakeLogs={intakeLogs} setIntakeLogs={setIntakeLogs} toast={toast} allModels={allModels} setAllModels={setAllModels} db={db} />}
           {view==="customers"   && <CustomersView customers={customers} tickets={tickets} openTicket={openTicket} />}
@@ -1946,7 +1955,7 @@ function StockIntakeView({ catalogue, setCatalogue, partCategories, intakeLogs, 
 // ─── SETTINGS (Technicians) ───────────────────────────────────────────────────
 const TECH_COLORS = ["#D4175A","#1A5FAB","#1F8A55","#7340AB","#C47A10","#C0252A","#0891B2","#9333EA","#EA580C","#0D9488"];
 
-function SettingsView({ technicians, setTechnicians, toast, partCategories, setPartCategories, catalogue, setCatalogue, db }) {
+function SettingsView({ technicians, setTechnicians, toast, partCategories, setPartCategories, catalogue, setCatalogue, db, tickets, customers, parts, intakeLogs, logs }) {
   const blank = { name:"", initials:"", color:TECH_COLORS[0] };
   const [form,    setForm]    = useState(blank);
   const [catInput, setCatInput] = useState("");
@@ -2111,6 +2120,69 @@ function SettingsView({ technicians, setTechnicians, toast, partCategories, setP
           );
         })}
       </div>
+
+      {/* ── Backup & Export ── */}
+      <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:20 }}>
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:T.text }}>💾 Backup & Export</div>
+          <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>Download a full JSON backup of all your data. Safe to do at any time.</div>
+        </div>
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+          <button onClick={() => {
+            const backup = {
+              exported_at: new Date().toISOString(),
+              shop: SHOP_NAME,
+              tickets, customers, parts, catalogue, technicians, partCategories, intakeLogs, logs,
+            };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type:"application/json" });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement("a");
+            a.href = url;
+            a.download = `repairflow-backup-${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast("✓ Backup downloaded");
+          }} style={{ background:T.green, color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontWeight:700, fontSize:13 }}>
+            ⬇ Download full backup (JSON)
+          </button>
+          <button onClick={() => {
+            const rows = [["Ticket ID","Type","Customer","Device","Status","Quote","Created"]];
+            tickets.forEach(t => {
+              const c = customers.find(x => x.id===t.customer_id);
+              rows.push([t.id, t.type, c?.name||"", `${t.device_manufacturer||""} ${t.device_model||""}`.trim(), t.status, t.initial_quote, t.created_at?.slice(0,10)]);
+            });
+            const csv = rows.map(r => r.map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(",")).join("\n");
+            const blob = new Blob([csv], { type:"text/csv" });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement("a");
+            a.href = url;
+            a.download = `repairflow-tickets-${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast("✓ Tickets CSV downloaded");
+          }} style={{ background:T.blue, color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontWeight:700, fontSize:13 }}>
+            ⬇ Tickets CSV
+          </button>
+          <button onClick={() => {
+            const rows = [["Customer","Email","Phone","SMS opt-in"]];
+            customers.forEach(c => rows.push([c.name, c.email||"", c.phone||"", c.sms_opt_in?"Yes":"No"]));
+            const csv = rows.map(r => r.map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(",")).join("\n");
+            const blob = new Blob([csv], { type:"text/csv" });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement("a");
+            a.href = url;
+            a.download = `repairflow-customers-${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast("✓ Customers CSV downloaded");
+          }} style={{ background:T.purple, color:"#fff", border:"none", borderRadius:8, padding:"9px 18px", fontWeight:700, fontSize:13 }}>
+            ⬇ Customers CSV
+          </button>
+        </div>
+        <div style={{ marginTop:10, fontSize:11, color:T.text3 }}>
+          Your data is stored in Supabase and is always safe — this is an additional local backup.
+        </div>
+      </div>
     </div>
   );
 }
@@ -2122,9 +2194,9 @@ const TEMPLATE_META = [
   { key:"ready_for_pickup",  label:"Ready for Pickup",   icon:"✅", desc:"Sent when the ticket status is moved to Ready for Pickup." },
 ];
 
-function TemplatesView({ msgTemplates, setMsgTemplates }) {
+function TemplatesView({ msgTemplates, setMsgTemplates, db }) {
   const [active, setActive]   = useState("part_arrived");
-  const [draft,  setDraft]    = useState(null);   // copy being edited
+  const [draft,  setDraft]    = useState(null);
   const [saved,  setSaved]    = useState(false);
 
   const tmplKeys = Object.keys(DEFAULT_TEMPLATES);
@@ -2132,13 +2204,17 @@ function TemplatesView({ msgTemplates, setMsgTemplates }) {
 
   function startEdit() { setDraft({ ...msgTemplates[active] }); setSaved(false); }
   function cancelEdit() { setDraft(null); }
-  function saveEdit() {
-    setMsgTemplates(t => ({ ...t, [active]: draft }));
+  async function saveEdit() {
+    const updated = { ...msgTemplates, [active]: draft };
+    setMsgTemplates(updated);
+    await db.saveSetting("msg_templates", updated);
     setDraft(null); setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
-  function resetToDefault() {
-    setMsgTemplates(t => ({ ...t, [active]: { ...DEFAULT_TEMPLATES[active] } }));
+  async function resetToDefault() {
+    const updated = { ...msgTemplates, [active]: { ...DEFAULT_TEMPLATES[active] } };
+    setMsgTemplates(updated);
+    await db.saveSetting("msg_templates", updated);
     setDraft(null); setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
