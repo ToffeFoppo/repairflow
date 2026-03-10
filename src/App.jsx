@@ -836,7 +836,6 @@ export default function RepairFlow() {
   const [activeTicket,   setActiveTicket]  = useState(null);
   const [toasts,         setToasts]        = useState([]);
   const [filterStatus,   setFilterStatus]  = useState("all");
-  const [search,         setSearch]        = useState("");
   const [msgTemplates,   setMsgTemplates]  = useState(DEFAULT_TEMPLATES);
   const [technicians,    setTechnicians]   = useState([]);
   const [filterTech,     setFilterTech]    = useState("all");
@@ -984,11 +983,9 @@ export default function RepairFlow() {
 
   const pendingCount = parts.filter(p => p.part_status==="pending").length + manualOrders.filter(m => m.status==="pending").length;
   const filteredTickets = tickets.filter(t => {
-    const c = customers.find(x => x.id===t.customer_id);
     const ms = filterStatus==="all" || t.status===filterStatus;
-    const q = search.toLowerCase();
     const mt = filterTech==="all" || t.technician_id===filterTech || (filterTech==="unassigned" && !t.technician_id);
-    return ms && mt && (!q || t.id.toLowerCase().includes(q) || t.device_model?.toLowerCase().includes(q) || (c && c.name.toLowerCase().includes(q)) || t.device_manufacturer?.toLowerCase().includes(q));
+    return ms && mt;
   });
 
   // ── Auth gates ───────────────────────────────────────────────────────────────
@@ -1030,7 +1027,7 @@ export default function RepairFlow() {
             <span style={{ marginLeft:14, color:T.border2 }}>ALV {(VAT_RATE*100).toFixed(1)}%</span>
           </span>
           <div style={{ display:"flex", gap:10 }}>
-            <input placeholder="Search: ticket, device, customer…" value={search} onChange={e => setSearch(e.target.value)} style={{ ...inp(), width:280 }} />
+            <GlobalSearch tickets={tickets} customers={customers} parts={parts} openTicket={openTicket} setView={setView} />
             <button onClick={() => setView("new_ticket")} style={{ background:T.pink, color:"#fff", border:"none", borderRadius:7, padding:"7px 18px", fontWeight:700, fontSize:13 }}>
               + New ticket
             </button>
@@ -1054,6 +1051,125 @@ export default function RepairFlow() {
         </div>
       </div>
       <Toast toasts={toasts} />
+    </div>
+  );
+}
+
+// ─── GLOBAL SEARCH ────────────────────────────────────────────────────────────
+function GlobalSearch({ tickets, customers, parts, openTicket, setView }) {
+  const [q,       setQ]       = useState("");
+  const [open,    setOpen]    = useState(false);
+  const inputRef              = useRef(null);
+  const boxRef                = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target)) {
+        setOpen(false); setQ("");
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const query = q.trim().toLowerCase();
+
+  const matchedTickets = query.length < 1 ? [] : tickets.filter(t => {
+    const c = customers.find(x => x.id === t.customer_id);
+    return (
+      t.id.toLowerCase().includes(query) ||
+      t.device_model?.toLowerCase().includes(query) ||
+      t.device_manufacturer?.toLowerCase().includes(query) ||
+      t.issue_desc?.toLowerCase().includes(query) ||
+      (c && c.name.toLowerCase().includes(query)) ||
+      (c && c.phone?.toLowerCase().includes(query)) ||
+      (c && c.email?.toLowerCase().includes(query))
+    );
+  }).slice(0, 6);
+
+  const matchedCustomers = query.length < 1 ? [] : customers.filter(c =>
+    !matchedTickets.some(t => t.customer_id === c.id) && (
+      c.name.toLowerCase().includes(query) ||
+      c.email?.toLowerCase().includes(query) ||
+      c.phone?.toLowerCase().includes(query)
+    )
+  ).slice(0, 4);
+
+  const hasResults = matchedTickets.length > 0 || matchedCustomers.length > 0;
+
+  function handleKey(e) {
+    if (e.key === "Escape") { setOpen(false); setQ(""); }
+  }
+
+  return (
+    <div ref={boxRef} style={{ position:"relative", width:300 }}>
+      <input
+        ref={inputRef}
+        value={q}
+        onChange={e => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKey}
+        placeholder="Search tickets, customers…"
+        style={{ ...inp(), width:"100%", paddingLeft:32 }}
+      />
+      <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:T.text3, fontSize:14, pointerEvents:"none" }}>🔍</span>
+
+      {open && q.length > 0 && (
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, right:0, background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:999, overflow:"hidden", maxHeight:420, overflowY:"auto" }}>
+
+          {!hasResults && (
+            <div style={{ padding:"16px 14px", fontSize:13, color:T.text3, textAlign:"center" }}>No results for "{q}"</div>
+          )}
+
+          {matchedTickets.length > 0 && (
+            <>
+              <div style={{ padding:"8px 14px 4px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".07em", borderBottom:`1px solid ${T.border}` }}>Tickets</div>
+              {matchedTickets.map(t => {
+                const c = customers.find(x => x.id === t.customer_id);
+                const st = getStatus(t.status);
+                return (
+                  <div key={t.id} onClick={() => { openTicket(t); setOpen(false); setQ(""); }}
+                    style={{ padding:"10px 14px", cursor:"pointer", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:10 }}
+                    onMouseEnter={e => e.currentTarget.style.background=T.surface2}
+                    onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                    <span style={{ fontSize:10, fontWeight:700, color:T.text3, fontFamily:"'IBM Plex Mono',monospace", flexShrink:0 }}>{t.id}</span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:T.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                        {t.device_manufacturer} {t.device_model}
+                      </div>
+                      <div style={{ fontSize:11, color:T.text3 }}>{c?.name || "—"} · {t.issue_desc?.slice(0,40)}{t.issue_desc?.length>40?"…":""}</div>
+                    </div>
+                    <span style={{ fontSize:10, fontWeight:700, color:st.color, background:st.bg, border:`1px solid ${st.color}44`, borderRadius:4, padding:"2px 7px", flexShrink:0 }}>{st.label}</span>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {matchedCustomers.length > 0 && (
+            <>
+              <div style={{ padding:"8px 14px 4px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".07em", borderBottom:`1px solid ${T.border}` }}>Customers</div>
+              {matchedCustomers.map(c => {
+                const ticketCount = tickets.filter(t => t.customer_id === c.id).length;
+                return (
+                  <div key={c.id} onClick={() => { setView("customers"); setOpen(false); setQ(""); }}
+                    style={{ padding:"10px 14px", cursor:"pointer", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:10 }}
+                    onMouseEnter={e => e.currentTarget.style.background=T.surface2}
+                    onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                    <span style={{ width:32, height:32, borderRadius:"50%", background:T.pinkBg, border:`1px solid ${T.pinkBd}`, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:T.pink, flexShrink:0 }}>
+                      {c.name.charAt(0).toUpperCase()}
+                    </span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{c.name}</div>
+                      <div style={{ fontSize:11, color:T.text3 }}>{c.phone || c.email || "—"} · {ticketCount} ticket{ticketCount!==1?"s":""}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
