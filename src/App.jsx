@@ -890,6 +890,41 @@ export default function RepairFlow() {
   }
   function openTicket(t) { setActiveTicket(t.id); setView("ticket"); }
 
+  // ── Real notification sender ─────────────────────────────────────────────
+  async function sendNotification(tmplKey, cust, ticket) {
+    const channels = [...(cust.email?["email"]:[]), ...(cust.sms_opt_in?["sms"]:[])];
+    if (!channels.length) channels.push("email");
+    const results = [];
+    for (const ch of channels) {
+      const msg = buildMessage(tmplKey, ch, cust, ticket, msgTemplates);
+      let deliveryStatus = "sent";
+      try {
+        if (ch === "email" && cust.email) {
+          const r = await fetch("/api/send-email", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ to: cust.email, subject: msg.subject, body: msg.body }),
+          });
+          const d = await r.json();
+          if (!r.ok) { console.error("Email failed:", d); deliveryStatus = "failed"; }
+        } else if (ch === "sms" && cust.phone) {
+          const r = await fetch("/api/send-sms", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ to: cust.phone, message: msg }),
+          });
+          const d = await r.json();
+          if (!r.ok) { console.error("SMS failed:", d); deliveryStatus = "failed"; }
+        }
+      } catch(e) { console.error("Send error:", e); deliveryStatus = "failed"; }
+
+      const logEntry = { id:genId("l"), ticket_id:ticket.id, customer_id:cust.id, channel:ch, template_key:tmplKey, message: ch==="email" ? `${msg.subject}\n\n${msg.body}` : msg, sent_at:new Date().toISOString(), status:deliveryStatus };
+      setLogs(ls => [...ls, logEntry]);
+      await supabase.from("logs").insert(logEntry);
+      results.push({ ch, status: deliveryStatus });
+    }
+    const icons = results.map(r => (r.ch==="email"?"📧":"📱") + (r.status==="failed"?" ❌":"")).join(" ");
+    return { icons, channels };
+  }
+
   const NOTIFY_STATUSES = ["part_arrived", "ready_for_pickup"];
 
   async function updateTicketStatus(tid, newStatus) {
@@ -901,15 +936,7 @@ export default function RepairFlow() {
       const cust   = ticket ? customers.find(c => c.id===ticket.customer_id) : null;
       if (cust) {
         const tmpl = newStatus==="ready_for_pickup" ? "ready_for_pickup" : "part_arrived";
-        const channels = [...(cust.email?["email"]:[]), ...(cust.sms_opt_in?["sms"]:[])];
-        channels.forEach(async ch => {
-          const ticket = tickets.find(t => t.id===tid);
-          const msg = buildMessage(tmpl, ch, cust, ticket, msgTemplates);
-          const logEntry = { id:genId("l"), ticket_id:tid, customer_id:cust.id, channel:ch, template_key:tmpl, message:msg, sent_at:new Date().toISOString(), status:"sent" };
-          setLogs(ls => [...ls, logEntry]);
-          await supabase.from("logs").insert(logEntry);
-        });
-        const icons = channels.map(c=>c==="email"?"📧":"📱").join(" ");
+        const { icons } = await sendNotification(tmpl, cust, ticket);
         toast(`${icons} Notification → ${cust.name}  (${newStatus==="ready_for_pickup"?"Ready for pickup":"Part arrived"})`, "success");
         return;
       }
@@ -947,17 +974,7 @@ export default function RepairFlow() {
         setTickets(ts => ts.map(t => t.id === ticket.id ? { ...t, status: "part_arrived" } : t));
         await supabase.from("tickets").update({ status: "part_arrived" }).eq("id", ticket.id);
         const tmpl = part.is_accessory ? "accessory_arrived" : "part_arrived";
-        const channels = [];
-        if (cust.email) channels.push("email");
-        if (cust.sms_opt_in) channels.push("sms");
-        if (!channels.length) channels.push("email");
-        channels.forEach(async ch => {
-          const msg = buildMessage(tmpl, ch, cust, ticket, msgTemplates);
-          const logEntry = { id:genId("l"), ticket_id:ticket.id, customer_id:cust.id, channel:ch, template_key:tmpl, message:msg, sent_at:new Date().toISOString(), status:"sent" };
-          setLogs(ls => [...ls, logEntry]);
-          await supabase.from("logs").insert(logEntry);
-        });
-        const icons = channels.map(c => c==="email"?"📧":"📱").join(" ");
+        const { icons } = await sendNotification(tmpl, cust, ticket);
         toast(`${icons} All parts arrived — notified ${cust.name}`, "success");
       } else {
         toast(`Part marked arrived · ${remaining} part${remaining!==1?"s":""} still pending`);
@@ -1040,7 +1057,7 @@ export default function RepairFlow() {
         <div style={{ flex:1, overflow:"auto" }}>
           {view==="dashboard"   && <DashboardView tickets={filteredTickets} customers={customers} parts={parts} openTicket={openTicket} filterStatus={filterStatus} setFilterStatus={setFilterStatus} updateTicketStatus={updateTicketStatus} deleteTicket={deleteTicket} technicians={technicians} filterTech={filterTech} setFilterTech={setFilterTech} />}
           {view==="ticket"      && <TicketView ticketId={activeTicket} tickets={tickets} customers={customers} parts={parts} logs={logs} setTickets={setTickets} setParts={setParts} updateTicketStatus={updateTicketStatus} updatePartStatus={updatePartStatus} deleteTicket={deleteTicket} toast={toast} technicians={technicians} catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} db={db} />}
-          {view==="parts_order" && <PartsOrderView tickets={tickets} setTickets={setTickets} customers={customers} parts={parts} updatePartStatus={updatePartStatus} manualOrders={manualOrders} setManualOrders={setManualOrders} toast={toast} catalogue={catalogue} setCatalogue={setCatalogue} db={db} />}
+          {view==="parts_order" && <PartsOrderView tickets={tickets} setTickets={setTickets} customers={customers} parts={parts} updatePartStatus={updatePartStatus} manualOrders={manualOrders} setManualOrders={setManualOrders} toast={toast} catalogue={catalogue} setCatalogue={setCatalogue} db={db} sendNotification={sendNotification} />}
           {view==="templates"   && <TemplatesView msgTemplates={msgTemplates} setMsgTemplates={setMsgTemplates} db={db} />}
           {view==="settings"    && <SettingsView technicians={technicians} setTechnicians={setTechnicians} toast={toast} partCategories={partCategories} setPartCategories={setPartCategories} catalogue={catalogue} setCatalogue={setCatalogue} db={db} tickets={tickets} customers={customers} parts={parts} intakeLogs={intakeLogs} logs={logs} />}
           {view==="catalogue"   && <CatalogueView catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} toast={toast} parts={parts} partCategories={partCategories} setPartCategories={setPartCategories} db={db} />}
@@ -3064,7 +3081,7 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
 }
 
 // ─── PARTS ORDER ──────────────────────────────────────────────────────────────
-function PartsOrderView({ tickets, setTickets, customers, parts, updatePartStatus, manualOrders, setManualOrders, toast, catalogue, setCatalogue, db }) {
+function PartsOrderView({ tickets, setTickets, customers, parts, updatePartStatus, manualOrders, setManualOrders, toast, catalogue, setCatalogue, db, sendNotification }) {
   const [showForm, setShowForm] = useState(false);
   const [mf, setMf] = useState({ item_name:"", supplier_sku:"", qty:1, cost:"", note:"" });
 
@@ -3099,14 +3116,7 @@ function PartsOrderView({ tickets, setTickets, customers, parts, updatePartStatu
         setTickets(ts => ts.map(t => t.id === ticketId ? { ...t, status: "part_arrived", acc_items: updatedAccItems } : t));
         await supabase.from("tickets").update({ status: "part_arrived" }).eq("id", ticketId);
         if (cust) {
-          const channels = [...(cust.email ? ["email"] : []), ...(cust.sms_opt_in ? ["sms"] : [])];
-          if (!channels.length) channels.push("email");
-          channels.forEach(async ch => {
-            const msg = buildMessage("accessory_arrived", ch, cust, ticket, DEFAULT_TEMPLATES);
-            const logEntry = { id: genId("l"), ticket_id: ticketId, customer_id: cust.id, channel: ch, template_key: "accessory_arrived", message: msg, sent_at: new Date().toISOString(), status: "sent" };
-            await supabase.from("logs").insert(logEntry);
-          });
-          const icons = [...(cust.email ? ["📧"] : []), ...(cust.sms_opt_in ? ["📱"] : [])].join(" ") || "📧";
+          const { icons } = await sendNotification("accessory_arrived", cust, ticket);
           toast(`${icons} All items arrived — notified ${cust.name}`, "success");
         } else {
           toast("All items arrived — ticket moved to Part Arrived", "success");
