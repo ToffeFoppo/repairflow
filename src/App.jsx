@@ -3469,7 +3469,8 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
     const fid = await resolveCustomer(); if (!fid) return;
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : (device.manufacturer || "Other");
     const finalIssue  = issue.trim() || REPAIR_TYPES.find(r=>r.value===repairType)?.label || "";
-    const tid = `TKT-${String(tickets.length + 47).padStart(4,"0")}`;
+    const maxNum = tickets.reduce((max, t) => { const n = parseInt(t.id?.replace("TKT-","")) || 0; return n > max ? n : max; }, 0);
+    const tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`;
     const nt = {
       id: tid, type: "repair",
       customer_id: fid,
@@ -3490,7 +3491,8 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
     const model = device.model || device.customModel;
     const fid = await resolveCustomer(); if (!fid) return;
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : device.manufacturer;
-    const tid = `TKT-${String(tickets.length + 47).padStart(4,"0")}`;
+    const maxNum = tickets.reduce((max, t) => { const n = parseInt(t.id?.replace("TKT-","")) || 0; return n > max ? n : max; }, 0);
+    const tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`;
     const firstItem = { id: genId("ai"), item: accItem.trim(), color: accColor.trim(), qty: parseInt(accQty)||1, price_incl_vat: ap, status: "pending" };
     const nt = {
       id: tid, type: "accessory",
