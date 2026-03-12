@@ -1062,7 +1062,7 @@ export default function RepairFlow() {
           {view==="settings"    && <SettingsView technicians={technicians} setTechnicians={setTechnicians} toast={toast} partCategories={partCategories} setPartCategories={setPartCategories} catalogue={catalogue} setCatalogue={setCatalogue} db={db} tickets={tickets} customers={customers} parts={parts} intakeLogs={intakeLogs} logs={logs} />}
           {view==="catalogue"   && <CatalogueView catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} toast={toast} parts={parts} partCategories={partCategories} setPartCategories={setPartCategories} db={db} />}
           {view==="stock_intake" && <StockIntakeView catalogue={catalogue} setCatalogue={setCatalogue} partCategories={partCategories} intakeLogs={intakeLogs} setIntakeLogs={setIntakeLogs} toast={toast} allModels={allModels} setAllModels={setAllModels} db={db} />}
-          {view==="customers"   && <CustomersView customers={customers} tickets={tickets} openTicket={openTicket} />}
+          {view==="customers"   && <CustomersView customers={customers} setCustomers={setCustomers} tickets={tickets} openTicket={openTicket} db={db} toast={toast} />}
           {view==="new_ticket"  && <NewTicketView customers={customers} setCustomers={setCustomers} tickets={tickets} setTickets={setTickets} toast={toast} setView={setView} setActiveTicket={setActiveTicket} allModels={allModels} setAllModels={setAllModels} db={db} />}
           {view==="logs"        && <LogsView logs={logs} tickets={tickets} customers={customers} />}
         </div>
@@ -2519,13 +2519,40 @@ function Sidebar({ view, setView, pendingCount }) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function DashboardView({ tickets, customers, parts, openTicket, filterStatus, setFilterStatus, updateTicketStatus, deleteTicket, technicians, filterTech, setFilterTech }) {
+  const [sortBy,  setSortBy]  = useState("date");   // "date" | "ticket"
+  const [sortDir, setSortDir] = useState("desc");   // "asc" | "desc"
+
   const active = tickets.filter(t => t.status !== "closed");
   const stats  = [
-    { l:"Open tickets",   v:active.length,                                          c:T.pink  },
+    { l:"Open tickets",      v:active.length,                                          c:T.pink  },
     { l:"Parts unordered",   v:parts.filter(p=>p.part_status==="pending").length,       c:T.red   },
-    { l:"Ready for pickup",     v:tickets.filter(t=>t.status==="ready_for_pickup").length, c:T.green },
-    { l:"Est. billing", v:fmtEur(active.reduce((s,t)=>s+t.initial_quote,0)),      c:T.blue, mono:true },
+    { l:"Ready for pickup",  v:tickets.filter(t=>t.status==="ready_for_pickup").length, c:T.green },
+    { l:"Est. billing",      v:fmtEur(active.reduce((s,t)=>s+t.initial_quote,0)),      c:T.blue, mono:true },
   ];
+
+  const sorted = [...tickets].sort((a,b) => {
+    let cmp = 0;
+    if (sortBy === "date")   cmp = new Date(a.created_at) - new Date(b.created_at);
+    if (sortBy === "ticket") cmp = a.id.localeCompare(b.id, undefined, { numeric:true });
+    return sortDir === "desc" ? -cmp : cmp;
+  });
+
+  function toggleSort(field) {
+    if (sortBy === field) setSortDir(d => d==="asc"?"desc":"asc");
+    else { setSortBy(field); setSortDir("desc"); }
+  }
+
+  const SortBtn = ({ field, label }) => {
+    const active = sortBy === field;
+    return (
+      <button onClick={() => toggleSort(field)}
+        style={{ background:active?T.pinkBg:T.surface, border:`1px solid ${active?T.pink:T.border}`, color:active?T.pink:T.text2, borderRadius:6, padding:"4px 10px", fontSize:11, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+        {label}
+        <span style={{ fontSize:10, opacity:.7 }}>{active ? (sortDir==="desc"?"↓":"↑") : "↕"}</span>
+      </button>
+    );
+  };
+
   return (
     <div style={{ padding:24 }}>
       {/* Stat cards */}
@@ -2554,10 +2581,15 @@ function DashboardView({ tickets, customers, parts, openTicket, filterStatus, se
         </div>
       )}
 
-      {/* Status filters */}
-      <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+      {/* Status filters + sort */}
+      <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
         <FBtn active={filterStatus==="all"} onClick={()=>setFilterStatus("all")} label="All" count={tickets.length} />
         {STATUSES.map(s => <FBtn key={s.key} active={filterStatus===s.key} onClick={()=>setFilterStatus(s.key)} label={s.label} color={s.color} bg={s.bg} count={tickets.filter(t=>t.status===s.key).length} />)}
+        <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
+          <span style={{ fontSize:10, color:T.text3, fontWeight:700, textTransform:"uppercase", letterSpacing:".07em" }}>Sort</span>
+          <SortBtn field="date"   label="Date" />
+          <SortBtn field="ticket" label="Ticket #" />
+        </div>
       </div>
 
       {/* List table */}
@@ -2573,7 +2605,7 @@ function DashboardView({ tickets, customers, parts, openTicket, filterStatus, se
           <div style={{ padding:"40px", textAlign:"center", color:T.text3, fontSize:13 }}>No tickets</div>
         )}
 
-        {tickets.map((ticket, i) => (
+        {sorted.map((ticket, i) => (
           <TicketRow
             key={ticket.id}
             ticket={ticket}
@@ -3368,37 +3400,234 @@ function PartsOrderView({ tickets, setTickets, customers, parts, updatePartStatu
 }
 
 // ─── CUSTOMERS ────────────────────────────────────────────────────────────────
-function CustomersView({ customers, tickets, openTicket }) {
-  const [q, setQ] = useState("");
-  const filtered  = customers.filter(c => { const s=q.toLowerCase(); return !s||c.name.toLowerCase().includes(s)||c.email.toLowerCase().includes(s)||c.phone.includes(s); });
+function CustomersView({ customers, setCustomers, tickets, openTicket, db, toast }) {
+  const [q,        setQ]        = useState("");
+  const [selected, setSelected] = useState(null); // customer id
+  const [editing,  setEditing]  = useState(false);
+  const [draft,    setDraft]    = useState(null);
+  const [saving,   setSaving]   = useState(false);
+
+  const filtered = customers
+    .filter(c => {
+      const s = q.toLowerCase();
+      return !s || c.name.toLowerCase().includes(s) || (c.email||"").toLowerCase().includes(s) || (c.phone||"").includes(s);
+    })
+    .sort((a,b) => a.name.localeCompare(b.name));
+
+  const cust   = customers.find(c => c.id === selected);
+  const cTickets = cust ? tickets.filter(t => t.customer_id === cust.id).sort((a,b) => new Date(b.created_at)-new Date(a.created_at)) : [];
+
+  function selectCustomer(c) {
+    setSelected(c.id);
+    setEditing(false);
+    setDraft(null);
+  }
+
+  function startEdit() {
+    setDraft({ ...cust });
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setDraft(null);
+    setEditing(false);
+  }
+
+  async function saveEdit() {
+    if (!draft.name.trim()) { toast("Name is required", "error"); return; }
+    setSaving(true);
+    const updated = { ...draft };
+    setCustomers(cs => cs.map(c => c.id === updated.id ? updated : c));
+    await db.saveCustomer(updated);
+    setSaving(false);
+    setEditing(false);
+    setDraft(null);
+    toast("Customer saved");
+  }
+
+  const totalSpend = cTickets.reduce((s,t) => s + (t.initial_quote||0), 0);
+
   return (
-    <div style={{ padding:24 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
-        <h2 style={{ margin:0, fontSize:20, fontWeight:700, color:T.text }}>Customers</h2>
-        <input placeholder="Search by name, email or phone…" value={q} onChange={e=>setQ(e.target.value)} style={{ ...inp(), width:320, marginLeft:"auto" }} />
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
-        {filtered.map(c => {
-          const ct=tickets.filter(t=>t.customer_id===c.id), op=ct.filter(t=>t.status!=="closed");
-          return (
-            <div key={c.id} style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, padding:16, boxShadow:"0 1px 4px rgba(0,0,0,.05)" }}>
-              <div style={{ fontSize:16, fontWeight:700, color:T.text, marginBottom:6 }}>{c.name}</div>
-              <div style={{ fontSize:12, color:T.text2, marginBottom:2 }}>📧 {c.email}</div>
-              <div style={{ fontSize:12, color:T.text2, marginBottom:2 }}>📱 {c.phone}{c.sms_opt_in&&<span style={{color:T.green}}> · SMS ✓</span>}</div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:10, paddingTop:10, borderTop:`1px solid ${T.border}` }}>
-                <span style={{ fontSize:11, color:op.length>0?T.amber:T.text3 }}>{ct.length} tickets · {op.length} open</span>
-                <span style={{ fontSize:12, fontWeight:700, color:T.pink }}>{fmtEur(ct.reduce((s,t)=>s+t.initial_quote,0))}</span>
+    <div style={{ display:"flex", height:"calc(100vh - 56px)", overflow:"hidden" }}>
+
+      {/* ── Left: customer list ── */}
+      <div style={{ width:320, flexShrink:0, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", background:T.surface }}>
+        <div style={{ padding:"14px 14px 10px", borderBottom:`1px solid ${T.border}` }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+            <span style={{ fontSize:15, fontWeight:700, color:T.text }}>Customers</span>
+            <span style={{ fontSize:11, color:T.text3 }}>{customers.length} total</span>
+          </div>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, email, phone…"
+            style={{ ...inp(), width:"100%", fontSize:12 }} />
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto" }}>
+          {filtered.map(c => {
+            const ct = tickets.filter(t => t.customer_id===c.id);
+            const op = ct.filter(t => t.status!=="closed").length;
+            const isActive = selected === c.id;
+            return (
+              <div key={c.id} onClick={() => selectCustomer(c)}
+                style={{ padding:"11px 14px", borderBottom:`1px solid ${T.border}`, cursor:"pointer",
+                  background: isActive ? T.pinkBg : "transparent",
+                  borderLeft: isActive ? `3px solid ${T.pink}` : "3px solid transparent" }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background=T.surface2; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background="transparent"; }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ width:32, height:32, borderRadius:"50%", background:isActive?T.pink:T.surface2, border:`1px solid ${isActive?T.pink:T.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:isActive?"#fff":T.text2, flexShrink:0 }}>
+                    {c.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:isActive?T.pink:T.text, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.name}</div>
+                    <div style={{ fontSize:11, color:T.text3 }}>{c.phone || c.email || "—"}</div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    {op > 0 && <div style={{ fontSize:10, fontWeight:700, color:T.amber, background:T.amberBg, borderRadius:4, padding:"1px 5px" }}>{op} open</div>}
+                    <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{ct.length} ticket{ct.length!==1?"s":""}</div>
+                  </div>
+                </div>
               </div>
-              {op.length>0&&<div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:4 }}>
-                {op.map(t=><button key={t.id} onClick={()=>openTicket(t)} style={{ background:T.surface2, border:`1px solid ${T.border}`, borderRadius:5, padding:"4px 8px", textAlign:"left", color:T.text2, fontSize:11, display:"flex", justifyContent:"space-between" }}>
-                  <span style={{ fontFamily:"'IBM Plex Mono',monospace" }}>{t.id}</span><StatusBadge status={t.status} small />
-                </button>)}
-              </div>}
+            );
+          })}
+          {!filtered.length && (
+            <div style={{ padding:40, textAlign:"center", color:T.text3, fontSize:13 }}>
+              {q ? `No results for "${q}"` : "No customers yet"}
             </div>
-          );
-        })}
-        {!filtered.length && <div style={{ gridColumn:"1/-1", textAlign:"center", padding:60, color:T.text3, fontSize:13 }}>No results for "{q}"</div>}
+          )}
+        </div>
       </div>
+
+      {/* ── Right: detail panel ── */}
+      {!cust ? (
+        <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", color:T.text3, fontSize:13 }}>
+          Select a customer to view details
+        </div>
+      ) : (
+        <div style={{ flex:1, overflowY:"auto", padding:24, background:T.bg }}>
+
+          {/* Header */}
+          <div style={{ display:"flex", alignItems:"flex-start", gap:14, marginBottom:20 }}>
+            <div style={{ width:52, height:52, borderRadius:"50%", background:T.pinkBg, border:`2px solid ${T.pinkBd}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:800, color:T.pink, flexShrink:0 }}>
+              {cust.name.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ flex:1 }}>
+              <h2 style={{ margin:"0 0 2px", fontSize:20, fontWeight:800, color:T.text }}>{cust.name}</h2>
+              <div style={{ fontSize:12, color:T.text3 }}>Customer since {cust.created_at ? new Date(cust.created_at).toLocaleDateString("fi-FI") : "—"}</div>
+            </div>
+            {!editing && (
+              <button onClick={startEdit}
+                style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:8, padding:"7px 16px", fontSize:13, fontWeight:600, color:T.text, cursor:"pointer" }}>
+                ✏ Edit
+              </button>
+            )}
+          </div>
+
+          {/* Stats row */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:20 }}>
+            {[
+              { l:"Total tickets", v:cTickets.length, c:T.blue },
+              { l:"Open tickets",  v:cTickets.filter(t=>t.status!=="closed").length, c:T.amber },
+              { l:"Total spend",   v:fmtEur(totalSpend), c:T.green },
+            ].map(s => (
+              <div key={s.l} style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 16px" }}>
+                <div style={{ fontSize:18, fontWeight:800, color:s.c, fontFamily:"'IBM Plex Mono',monospace" }}>{s.v}</div>
+                <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Contact details / edit form */}
+          <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:20, marginBottom:20 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:14 }}>Contact details</div>
+
+            {editing ? (
+              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                {[
+                  { label:"Full name",    key:"name",  type:"text",  req:true  },
+                  { label:"Email",        key:"email", type:"email", req:false },
+                  { label:"Phone",        key:"phone", type:"tel",   req:false },
+                  { label:"Address",      key:"address",type:"text", req:false },
+                  { label:"Notes",        key:"notes", type:"textarea",req:false },
+                ].map(f => (
+                  <div key={f.key}>
+                    <div style={{ fontSize:11, fontWeight:600, color:T.text2, marginBottom:4 }}>{f.label}{f.req&&<span style={{color:T.pink}}> *</span>}</div>
+                    {f.type==="textarea"
+                      ? <textarea value={draft[f.key]||""} onChange={e=>setDraft(d=>({...d,[f.key]:e.target.value}))}
+                          rows={3} style={{ ...inp(), width:"100%", resize:"vertical", fontSize:13 }} />
+                      : <input type={f.type} value={draft[f.key]||""} onChange={e=>setDraft(d=>({...d,[f.key]:e.target.value}))}
+                          style={{ ...inp(), width:"100%", fontSize:13 }} />
+                    }
+                  </div>
+                ))}
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:T.text, cursor:"pointer" }}>
+                    <input type="checkbox" checked={!!draft.sms_opt_in} onChange={e=>setDraft(d=>({...d,sms_opt_in:e.target.checked}))} />
+                    SMS notifications
+                  </label>
+                </div>
+                <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                  <button onClick={saveEdit} disabled={saving}
+                    style={{ background:T.pink, color:"#fff", border:"none", borderRadius:8, padding:"8px 20px", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                    {saving ? "Saving…" : "Save changes"}
+                  </button>
+                  <button onClick={cancelEdit}
+                    style={{ background:T.surface2, color:T.text2, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 16px", fontSize:13, cursor:"pointer" }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                {[
+                  { l:"Email",   v:cust.email   || "—" },
+                  { l:"Phone",   v:cust.phone   || "—" },
+                  { l:"Address", v:cust.address || "—" },
+                  { l:"SMS opt-in", v:cust.sms_opt_in ? "✓ Yes" : "No" },
+                  ...(cust.notes ? [{ l:"Notes", v:cust.notes }] : []),
+                ].map(r => (
+                  <div key={r.l} style={{ gridColumn: r.l==="Notes"?"1/-1":"auto" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>{r.l}</div>
+                    <div style={{ fontSize:13, color:T.text }}>{r.v}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Ticket history */}
+          <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:20 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:14 }}>Ticket history</div>
+            {!cTickets.length && (
+              <div style={{ textAlign:"center", padding:"20px 0", color:T.text3, fontSize:13 }}>No tickets yet</div>
+            )}
+            {cTickets.map(t => {
+              const st = getStatus(t.status);
+              const isAcc = t.type === "accessory";
+              return (
+                <div key={t.id} onClick={() => openTicket(t)}
+                  style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", borderRadius:8, marginBottom:6, border:`1px solid ${T.border}`, background:T.bg, cursor:"pointer" }}
+                  onMouseEnter={e => e.currentTarget.style.background=T.surface2}
+                  onMouseLeave={e => e.currentTarget.style.background=T.bg}>
+                  <div style={{ fontSize:16 }}>{isAcc ? "📦" : "🔧"}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
+                      <span style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, fontWeight:700, color:isAcc?T.purple:T.pink }}>{t.id}</span>
+                      <span style={{ fontSize:11, color:T.text2 }}>{t.device_manufacturer} {t.device_model}</span>
+                    </div>
+                    <div style={{ fontSize:11, color:T.text3 }}>{t.issue_desc?.slice(0,60)}{t.issue_desc?.length>60?"…":""}</div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <StatusBadge status={t.status} small />
+                    <div style={{ fontSize:10, color:T.text3, marginTop:3 }}>{t.created_at ? new Date(t.created_at).toLocaleDateString("fi-FI") : ""}</div>
+                  </div>
+                  <span style={{ fontSize:12, color:T.text3 }}>›</span>
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+      )}
     </div>
   );
 }
