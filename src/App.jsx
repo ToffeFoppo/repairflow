@@ -153,14 +153,19 @@ const SEED_MODELS = (() => {
 //   await supabase.from('device_models').delete().not('id', 'in', `(${currentIds.join(',')})`);
 
 async function fetchModels() {
-  // Simulates a ~80ms network round-trip
-  return new Promise(resolve => setTimeout(() => resolve([...SEED_MODELS]), 80));
+  const { data, error } = await supabase.from("device_models").select("*").order("sort_order");
+  if (error || !data || data.length === 0) return [...SEED_MODELS];
+  return data;
 }
 
 async function saveModels(models) {
-  // Simulates a ~300ms write
-  console.log("[mock API] saveModels →", models.length, "rows");
-  return new Promise(resolve => setTimeout(resolve, 300));
+  if (!models || models.length === 0) return;
+  const { error } = await supabase.from("device_models").upsert(models, { onConflict: "id" });
+  if (error) { console.error("saveModels upsert:", error); return; }
+  const currentIds = models.map(m => m.id);
+  await supabase.from("device_models").delete()
+    .not("id", "in", `(${currentIds.join(",")})`)
+    .not("id", "like", "seed_%");
 }
 
 const CATEGORIES = ["Phone", "Tablet", "Computer", "Other"];
@@ -918,7 +923,8 @@ export default function RepairFlow() {
 
       const logEntry = { id:genId("l"), ticket_id:ticket.id, customer_id:cust.id, channel:ch, template_key:tmplKey, message: ch==="email" ? `${msg.subject}\n\n${msg.body}` : msg, sent_at:new Date().toISOString(), status:deliveryStatus };
       setLogs(ls => [...ls, logEntry]);
-      await supabase.from("logs").insert(logEntry);
+      const { error: logErr } = await supabase.from("logs").insert(logEntry);
+      if (logErr) console.error("log insert failed:", logErr);
       results.push({ ch, status: deliveryStatus });
     }
     const icons = results.map(r => (r.ch==="email"?"📧":"📱") + (r.status==="failed"?" ❌":"")).join(" ");
@@ -2939,7 +2945,22 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
             {ticket.warranty_months && <div style={{ fontSize:11, color:T.green, marginTop:5 }}>✓ Warranty: {WARRANTY_OPTIONS.find(w=>w.value===ticket.warranty_months)?.label}</div>}
           </div>
 
-          <div style={{ marginTop:12 }}><VatBox total={ticket.initial_quote} /></div>
+          <div style={{ marginTop:12 }}>
+            <div style={{ fontSize:10, color:T.text3, letterSpacing:".07em", textTransform:"uppercase", marginBottom:6 }}>💶 Price (incl. 25.5% VAT)</div>
+            <input
+              type="number" step="0.01" min="0"
+              defaultValue={ticket.initial_quote || ""}
+              onBlur={e => {
+                const v = parseFloat(e.target.value) || 0;
+                if (v !== ticket.initial_quote) save("initial_quote", v);
+              }}
+              placeholder="0.00"
+              style={{ ...inp(), width:"100%", fontFamily:"'IBM Plex Mono',monospace", fontWeight:700, fontSize:15 }}
+            />
+            {ticket.initial_quote > 0 && (
+              <div style={{ marginTop:6 }}><VatBox total={ticket.initial_quote} /></div>
+            )}
+          </div>
         </Sec>
 
         {/* Parts */}
