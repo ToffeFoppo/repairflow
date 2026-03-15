@@ -703,6 +703,61 @@ function R2({ l, v, bold }) {
   </div>;
 }
 
+function PriceEditor({ ticket, save }) {
+  const [editing, setEditing] = useState(false);
+  const [val,     setVal]     = useState("");
+
+  function open() { setVal(ticket.initial_quote > 0 ? String(ticket.initial_quote) : ""); setEditing(true); }
+  function cancel() { setEditing(false); setVal(""); }
+  function confirm() {
+    const v = parseFloat(val) || 0;
+    save("initial_quote", v);
+    setEditing(false);
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize:10, color:T.text3, letterSpacing:".07em", textTransform:"uppercase", marginBottom:6 }}>💶 Price (incl. 25.5% VAT)</div>
+      {editing ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          <input
+            autoFocus
+            type="number" step="0.01" min="0"
+            value={val}
+            onChange={e => setVal(e.target.value)}
+            onKeyDown={e => { if (e.key==="Enter") confirm(); if (e.key==="Escape") cancel(); }}
+            placeholder="0.00"
+            style={{ ...inp(), fontFamily:"'IBM Plex Mono',monospace", fontWeight:700, fontSize:15 }}
+          />
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={confirm}
+              style={{ flex:1, background:T.pink, color:"#fff", border:"none", borderRadius:7, padding:"7px 0", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+              ✓ Save price
+            </button>
+            <button onClick={cancel}
+              style={{ background:T.surface2, color:T.text2, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 12px", fontSize:13, cursor:"pointer" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+          <div style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:18, fontWeight:800, color:ticket.initial_quote>0?T.text:T.text3 }}>
+            {ticket.initial_quote > 0 ? fmtEur(ticket.initial_quote) : "Not set"}
+          </div>
+          <button onClick={open}
+            style={{ background:T.surface2, border:`1px solid ${T.border}`, borderRadius:7, padding:"5px 12px", fontSize:12, fontWeight:600, color:T.text2, cursor:"pointer" }}>
+            ✏ Edit price
+          </button>
+        </div>
+      )}
+      {!editing && ticket.initial_quote > 0 && (
+        <div style={{ marginTop:8 }}><VatBox total={ticket.initial_quote} /></div>
+      )}
+    </div>
+  );
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 // ─── SET PASSWORD SCREEN ──────────────────────────────────────────────────────
 function SetPasswordScreen() {
@@ -2946,20 +3001,7 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
           </div>
 
           <div style={{ marginTop:12 }}>
-            <div style={{ fontSize:10, color:T.text3, letterSpacing:".07em", textTransform:"uppercase", marginBottom:6 }}>💶 Price (incl. 25.5% VAT)</div>
-            <input
-              type="number" step="0.01" min="0"
-              defaultValue={ticket.initial_quote || ""}
-              onBlur={e => {
-                const v = parseFloat(e.target.value) || 0;
-                if (v !== ticket.initial_quote) save("initial_quote", v);
-              }}
-              placeholder="0.00"
-              style={{ ...inp(), width:"100%", fontFamily:"'IBM Plex Mono',monospace", fontWeight:700, fontSize:15 }}
-            />
-            {ticket.initial_quote > 0 && (
-              <div style={{ marginTop:6 }}><VatBox total={ticket.initial_quote} /></div>
-            )}
+            <PriceEditor ticket={ticket} save={save} />
           </div>
         </Sec>
 
