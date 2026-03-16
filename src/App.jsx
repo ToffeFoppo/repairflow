@@ -154,18 +154,30 @@ const SEED_MODELS = (() => {
 
 async function fetchModels() {
   const { data, error } = await supabase.from("device_models").select("*").order("sort_order");
-  if (error || !data || data.length === 0) return [...SEED_MODELS];
-  return data;
+  if (error) console.error("fetchModels:", error);
+  const custom = (data || []).filter(m => !m.id.startsWith("seed_"));
+  // Merge: seeds first, then custom models appended at end
+  return [...SEED_MODELS, ...custom];
 }
 
 async function saveModels(models) {
-  if (!models || models.length === 0) return;
-  const { error } = await supabase.from("device_models").upsert(models, { onConflict: "id" });
+  // Only persist custom models (non-seed) to Supabase
+  const custom = (models || []).filter(m => !m.id.startsWith("seed_"));
+  if (custom.length === 0) {
+    // If no custom models, delete any previously saved custom models
+    const { error } = await supabase.from("device_models").delete().not("id", "like", "seed_%");
+    if (error) console.error("saveModels delete:", error);
+    return;
+  }
+  const { error } = await supabase.from("device_models").upsert(custom, { onConflict: "id" });
   if (error) { console.error("saveModels upsert:", error); return; }
-  const currentIds = models.map(m => m.id);
-  await supabase.from("device_models").delete()
-    .not("id", "in", `(${currentIds.join(",")})`)
+  const customIds = custom.map(m => m.id);
+  // Delete custom models that were removed
+  const { error: delErr } = await supabase.from("device_models")
+    .delete()
+    .not("id", "in", `(${customIds.join(",")})`)
     .not("id", "like", "seed_%");
+  if (delErr) console.error("saveModels cleanup:", delErr);
 }
 
 const CATEGORIES = ["Phone", "Tablet", "Computer", "Other"];
