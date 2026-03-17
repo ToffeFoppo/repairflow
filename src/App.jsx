@@ -113,29 +113,9 @@ function getStatus(k) { return STATUSES.find(s => s.key === k) || STATUSES[0]; }
 // This is the initial dataset. In production this lives in a database table:
 //   device_models(id, category, brand, model_name, sort_order)
 // sort_order uses steps of 10 to leave room for insertions.
-const SEED_MODELS = (() => {
-  const rows = [];
-  let seq = 0;
-  const add = (category, brand, names) =>
-    names.forEach(model_name => rows.push({ id:`seed_${++seq}`, category, brand, model_name, sort_order: seq * 10 }));
-
-  add("Phone","Apple",  ["iPhone 16 Pro Max","iPhone 16 Pro","iPhone 16 Plus","iPhone 16","iPhone 15 Pro Max","iPhone 15 Pro","iPhone 15 Plus","iPhone 15","iPhone 14 Pro Max","iPhone 14 Pro","iPhone 14 Plus","iPhone 14","iPhone 13 Pro Max","iPhone 13 Pro","iPhone 13","iPhone 13 Mini","iPhone 12 Pro Max","iPhone 12 Pro","iPhone 12","iPhone 12 Mini","iPhone SE (3rd gen)","iPhone SE (2nd gen)"]);
-  add("Phone","Samsung",["Galaxy S25 Ultra","Galaxy S25+","Galaxy S25","Galaxy S24 Ultra","Galaxy S24+","Galaxy S24","Galaxy S23 Ultra","Galaxy S23+","Galaxy S23","Galaxy S22 Ultra","Galaxy S22+","Galaxy S22","Galaxy S21 Ultra","Galaxy S21+","Galaxy S21","Galaxy S20 FE","Galaxy A56","Galaxy A55","Galaxy A54","Galaxy A35","Galaxy A34","Galaxy A25","Galaxy A15","Galaxy Z Fold 6","Galaxy Z Fold 5","Galaxy Z Fold 4","Galaxy Z Flip 6","Galaxy Z Flip 5","Galaxy Z Flip 4","Galaxy Z Flip 3"]);
-  add("Phone","OnePlus",["OnePlus 13","OnePlus 12","OnePlus 11","OnePlus 10 Pro","OnePlus 10T","OnePlus 9 Pro","OnePlus 9","Nord 4","Nord 3","Nord CE 4 Lite","Nord CE 4","Nord CE 3 Lite","Nord CE 3","Nord CE 2"]);
-  add("Phone","Honor",  ["Honor 200 Pro","Honor 200","Honor 90 Pro","Honor 90","Honor 80 Pro","Honor 80","Honor Magic6 Pro","Honor Magic6","Honor Magic5 Pro","Honor Magic5","Honor X9b","Honor X9a","Honor X8b","Honor X8a","Honor X7b"]);
-  add("Phone","Huawei", ["Huawei P60 Pro","Huawei P60","Huawei P50 Pro","Huawei P50","Huawei P40 Pro","Huawei P40","Huawei Mate 60 Pro","Huawei Mate 60","Huawei Mate 50 Pro","Huawei Mate 50","Huawei Nova 12 Pro","Huawei Nova 11 Pro","Huawei Nova 11","Huawei Nova 10 Pro","Huawei Nova 10"]);
-
-  add("Tablet","Apple",  ["iPad Pro 13\" M4","iPad Pro 11\" M4","iPad Pro 12.9\" M2","iPad Pro 11\" M2","iPad Air 13\" M2","iPad Air 11\" M2","iPad Air 5th gen","iPad Mini 7","iPad Mini 6","iPad 10th gen","iPad 9th gen"]);
-  add("Tablet","Samsung",["Galaxy Tab S10 Ultra","Galaxy Tab S10+","Galaxy Tab S10","Galaxy Tab S9 Ultra","Galaxy Tab S9+","Galaxy Tab S9","Galaxy Tab S9 FE","Galaxy Tab S8 Ultra","Galaxy Tab S8+","Galaxy Tab S8","Galaxy Tab A9+","Galaxy Tab A9","Galaxy Tab A8"]);
-  add("Tablet","OnePlus",["OnePlus Pad 2","OnePlus Pad Go","OnePlus Pad"]);
-
-  add("Computer","Apple", ["MacBook Pro 16\" M4 Pro","MacBook Pro 16\" M4 Max","MacBook Pro 14\" M4 Pro","MacBook Pro 14\" M4","MacBook Pro 16\" M3 Pro","MacBook Pro 16\" M3 Max","MacBook Pro 14\" M3 Pro","MacBook Pro 14\" M3","MacBook Air 15\" M3","MacBook Air 13\" M3","MacBook Air 15\" M2","MacBook Air 13\" M2","MacBook Pro 14\" M2 Pro","MacBook Pro 16\" M2 Pro","Mac mini M4","Mac mini M2","iMac 24\" M4","iMac 24\" M3","iMac 24\" M1","Mac Studio M4 Max","Mac Studio M2 Max"]);
-  add("Computer","Dell",  ["XPS 15 9560","XPS 15 9550","XPS 15 9530","XPS 15 9520","XPS 13 9350","XPS 13 9340","XPS 13 9320","XPS 13 Plus 9320","Inspiron 16 Plus","Inspiron 15 3530","Inspiron 14 5440","Latitude 7450","Latitude 7440","Latitude 5550","Latitude 5540","Precision 5690","Precision 5680","Vostro 15 3530"]);
-  add("Computer","HP",    ["Spectre x360 14","Spectre x360 16","EliteBook 840 G11","EliteBook 840 G10","EliteBook 840 G9","EliteBook 860 G11","Pavilion Plus 16","Pavilion Plus 14","Pavilion 15","Envy x360 14","Envy x360 15","Envy 16","ProBook 450 G11","ProBook 450 G10","Omen 16","Victus 16","Dragonfly G4"]);
-  add("Computer","Lenovo",["ThinkPad X1 Carbon Gen 13","ThinkPad X1 Carbon Gen 12","ThinkPad X1 Carbon Gen 11","ThinkPad T14s Gen 5","ThinkPad T14 Gen 5","ThinkPad T14 Gen 4","ThinkPad E14 Gen 6","ThinkBook 14 Gen 7","ThinkBook 16 Gen 7","IdeaPad Slim 5 16","IdeaPad Slim 5 14","IdeaPad Pro 5i","Yoga 9i 14","Yoga 7i 16","Legion Slim 5i","Legion 5i","Legion 7i","Legion Pro 5i"]);
-
-  return rows;
-})();
+// All device models are now managed in Supabase (device_models table)
+// Use SQL files in the project to add/update models
+const SEED_MODELS = [];
 
 // ─── DEVICE MODELS API ────────────────────────────────────────────────────────
 // ✦ SUPABASE SWAP GUIDE ✦
@@ -161,23 +141,19 @@ async function fetchModels() {
 }
 
 async function saveModels(models) {
-  // Only persist custom models (non-seed) to Supabase
+  // Only save custom (non-seed) models to Supabase
+  // We ONLY upsert — never delete — to avoid wiping SQL-inserted models
   const custom = (models || []).filter(m => !m.id.startsWith("seed_"));
-  if (custom.length === 0) {
-    // If no custom models, delete any previously saved custom models
-    const { error } = await supabase.from("device_models").delete().not("id", "like", "seed_%");
-    if (error) console.error("saveModels delete:", error);
-    return;
-  }
+  if (custom.length === 0) return;
   const { error } = await supabase.from("device_models").upsert(custom, { onConflict: "id" });
-  if (error) { console.error("saveModels upsert:", error); return; }
-  const customIds = custom.map(m => m.id);
-  // Delete custom models that were removed
-  const { error: delErr } = await supabase.from("device_models")
-    .delete()
-    .not("id", "in", `(${customIds.join(",")})`)
-    .not("id", "like", "seed_%");
-  if (delErr) console.error("saveModels cleanup:", delErr);
+  if (error) console.error("saveModels upsert:", error);
+}
+
+async function deleteModel(modelId) {
+  // Explicit single-row delete — only called when user removes a model
+  if (!modelId || modelId.startsWith("seed_")) return;
+  const { error } = await supabase.from("device_models").delete().eq("id", modelId);
+  if (error) console.error("deleteModel:", error);
 }
 
 const CATEGORIES = ["Phone", "Tablet", "Computer", "Other"];
@@ -477,6 +453,12 @@ function DeviceSelector({ value, onChange, allModels, setAllModels }) {
     const row = modelsForBrand.find(m => m.id === id);
     updateBrandModels(modelsForBrand.filter(m => m.id !== id));
     if (row && value.model === row.model_name) onChange({ ...value, model: "" });
+    // Explicitly delete from Supabase immediately
+    if (id && !id.startsWith("seed_")) {
+      supabase.from("device_models").delete().eq("id", id).then(({ error }) => {
+        if (error) console.error("deleteModel:", error);
+      });
+    }
   }
 
   // ── Save to backend ──
