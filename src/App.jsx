@@ -1112,7 +1112,7 @@ export default function RepairFlow() {
         <div style={{ flex:1, overflow:"auto" }}>
           {view==="dashboard"   && <DashboardView tickets={filteredTickets} customers={customers} parts={parts} openTicket={openTicket} filterStatus={filterStatus} setFilterStatus={setFilterStatus} updateTicketStatus={updateTicketStatus} deleteTicket={deleteTicket} technicians={technicians} filterTech={filterTech} setFilterTech={setFilterTech} />}
           {view==="ticket"      && <TicketView ticketId={activeTicket} tickets={tickets} customers={customers} parts={parts} logs={logs} setTickets={setTickets} setParts={setParts} updateTicketStatus={updateTicketStatus} updatePartStatus={updatePartStatus} deleteTicket={deleteTicket} toast={toast} technicians={technicians} catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} db={db} />}
-          {view==="parts_order" && <PartsOrderView tickets={tickets} setTickets={setTickets} customers={customers} parts={parts} updatePartStatus={updatePartStatus} manualOrders={manualOrders} setManualOrders={setManualOrders} toast={toast} catalogue={catalogue} setCatalogue={setCatalogue} db={db} sendNotification={sendNotification} />}
+          {view==="parts_order" && <PartsOrderView tickets={tickets} setTickets={setTickets} customers={customers} parts={parts} setParts={setParts} updatePartStatus={updatePartStatus} manualOrders={manualOrders} setManualOrders={setManualOrders} toast={toast} catalogue={catalogue} setCatalogue={setCatalogue} db={db} sendNotification={sendNotification} />}
           {view==="templates"   && <TemplatesView msgTemplates={msgTemplates} setMsgTemplates={setMsgTemplates} db={db} />}
           {view==="settings"    && <SettingsView technicians={technicians} setTechnicians={setTechnicians} toast={toast} partCategories={partCategories} setPartCategories={setPartCategories} catalogue={catalogue} setCatalogue={setCatalogue} db={db} tickets={tickets} customers={customers} parts={parts} intakeLogs={intakeLogs} logs={logs} />}
           {view==="catalogue"   && <CatalogueView catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} toast={toast} parts={parts} partCategories={partCategories} setPartCategories={setPartCategories} db={db} />}
@@ -3170,7 +3170,7 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
 }
 
 // ─── PARTS ORDER ──────────────────────────────────────────────────────────────
-function PartsOrderView({ tickets, setTickets, customers, parts, updatePartStatus, manualOrders, setManualOrders, toast, catalogue, setCatalogue, db, sendNotification }) {
+function PartsOrderView({ tickets, setTickets, customers, parts, setParts, updatePartStatus, manualOrders, setManualOrders, toast, catalogue, setCatalogue, db, sendNotification }) {
   const [showForm, setShowForm] = useState(false);
   const [mf, setMf] = useState({ item_name:"", supplier_sku:"", qty:1, cost:"", note:"" });
 
@@ -3229,6 +3229,22 @@ function PartsOrderView({ tickets, setTickets, customers, parts, updatePartStatu
   }
   function markM(id, status) { setManualOrders(mo => mo.map(m => m.id===id ? {...m,status} : m)); }
   function delM(id)           { setManualOrders(mo => mo.filter(m => m.id!==id)); toast("Deleted","warn"); }
+
+  async function delRepairPart(partId) {
+    setParts(ps => ps.filter(p => p.id !== partId));
+    await supabase.from("parts").delete().eq("id", partId);
+    toast("Part removed", "warn");
+  }
+
+  async function delAccItem(ticketId, itemId) {
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) return;
+    const updatedAccItems = (ticket.acc_items || []).filter(i => i.id !== itemId);
+    const total = updatedAccItems.reduce((s, i) => s + (i.price_incl_vat||0)*(i.qty||1), 0);
+    setTickets(ts => ts.map(t => t.id === ticketId ? { ...t, acc_items: updatedAccItems, initial_quote: total } : t));
+    await supabase.from("tickets").update({ acc_items: updatedAccItems, initial_quote: total }).eq("id", ticketId);
+    toast("Item removed", "warn");
+  }
 
   // ── stats ─────────────────────────────────────────────────────────────────
   const totalPending    = pending.length + accPending.length + mPending.length;
@@ -3418,35 +3434,38 @@ function PartsOrderView({ tickets, setTickets, customers, parts, updatePartStatu
         <div style={{ marginTop:24 }}>
           <div style={{ fontSize:10, color:T.blue, letterSpacing:".08em", textTransform:"uppercase", marginBottom:10, fontWeight:700 }}>◎ Awaiting arrival ({ordered.length+accOrdered.length+mOrdered.length})</div>
           <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, overflow:"hidden" }}>
-            <PH cols={["Type","Ticket / Ref","Item","Qty","Price","Action"]} sizes="100px 160px 1fr 44px 90px 140px" />
+            <PH cols={["Type","Ticket / Ref","Item","Qty","Price","Action",""]} sizes="100px 160px 1fr 44px 90px 120px 36px" />
             {ordered.map(p => {
               const t=tickets.find(t=>t.id===p.ticket_id);
               return (
-                <div key={p.id} style={{ display:"grid", gridTemplateColumns:"100px 160px 1fr 44px 90px 140px", borderTop:`1px solid ${T.border}`, alignItems:"center" }}>
+                <div key={p.id} style={{ display:"grid", gridTemplateColumns:"100px 160px 1fr 44px 90px 120px 36px", borderTop:`1px solid ${T.border}`, alignItems:"center" }}>
                   <PC><span style={{ fontSize:9, color:T.text3, textTransform:"uppercase", letterSpacing:".06em" }}>🔧 Repair</span></PC>
                   <PC mono small pink>{t?.id?.slice(-6)} · {t?.device_model?.slice(0,12)}</PC>
                   <PC>{p.part_name}</PC><PC center>{p.qty}</PC>
                   <PC mono small>{fmtEur(p.cost*(1+VAT_RATE))}</PC>
                   <PC><button onClick={()=>updatePartStatus(p.id,"arrived")} style={{ background:T.green, border:"none", borderRadius:5, padding:"4px 10px", color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>✓ Arrived</button></PC>
+                  <PC><button onClick={()=>delRepairPart(p.id)} style={{ background:T.redBg, border:`1px solid ${T.red}33`, borderRadius:5, padding:"4px 7px", color:T.red, fontSize:12, cursor:"pointer" }} title="Remove">✕</button></PC>
                 </div>
               );
             })}
             {accOrdered.map(i => (
-              <div key={i.id} style={{ display:"grid", gridTemplateColumns:"100px 160px 1fr 44px 90px 140px", borderTop:`1px solid ${T.border}`, alignItems:"center" }}>
+              <div key={i.id} style={{ display:"grid", gridTemplateColumns:"100px 160px 1fr 44px 90px 120px 36px", borderTop:`1px solid ${T.border}`, alignItems:"center" }}>
                 <PC><span style={{ fontSize:9, color:T.purple, textTransform:"uppercase", letterSpacing:".06em" }}>📦 Acc.</span></PC>
                 <PC mono small purple>{i._ticketId?.slice(-6)} · {i._customer?.name?.slice(0,12)}</PC>
                 <PC>{i.item}{i.color ? <span style={{ color:T.text3, fontSize:11 }}> — {i.color}</span> : ""}</PC>
                 <PC center>{i.qty}</PC>
                 <PC mono small purple>{fmtEur((i.price_incl_vat||0)*(i.qty||1))}</PC>
                 <PC><button onClick={()=>updateAccItemStatus(i._ticketId,i.id,"arrived")} style={{ background:T.green, border:"none", borderRadius:5, padding:"4px 10px", color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>✓ Arrived</button></PC>
+                <PC><button onClick={()=>delAccItem(i._ticketId,i.id)} style={{ background:T.redBg, border:`1px solid ${T.red}33`, borderRadius:5, padding:"4px 7px", color:T.red, fontSize:12, cursor:"pointer" }} title="Remove">✕</button></PC>
               </div>
             ))}
             {mOrdered.map(m => (
-              <div key={m.id} style={{ display:"grid", gridTemplateColumns:"100px 160px 1fr 44px 90px 140px", borderTop:`1px solid ${T.border}`, alignItems:"center" }}>
+              <div key={m.id} style={{ display:"grid", gridTemplateColumns:"100px 160px 1fr 44px 90px 120px 36px", borderTop:`1px solid ${T.border}`, alignItems:"center" }}>
                 <PC><span style={{ fontSize:9, color:T.pink, textTransform:"uppercase", letterSpacing:".06em" }}>✏️ Manual</span></PC>
                 <PC small>{m.note||"—"}</PC><PC>{m.item_name}</PC><PC center>{m.qty}</PC>
                 <PC mono small>{fmtEur((parseFloat(m.cost)||0)*(1+VAT_RATE))}</PC>
                 <PC><button onClick={()=>markM(m.id,"arrived")} style={{ background:T.green, border:"none", borderRadius:5, padding:"4px 10px", color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>✓ Arrived</button></PC>
+                <PC><button onClick={()=>delM(m.id)} style={{ background:T.redBg, border:`1px solid ${T.red}33`, borderRadius:5, padding:"4px 7px", color:T.red, fontSize:12, cursor:"pointer" }} title="Remove">✕</button></PC>
               </div>
             ))}
           </div>
@@ -3756,7 +3775,9 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : (device.manufacturer || "Other");
     const finalIssue  = issue.trim() || REPAIR_TYPES.find(r=>r.value===repairType)?.label || "";
     const maxNum = tickets.reduce((max, t) => { const n = parseInt(t.id?.replace("TKT-","")) || 0; return n > max ? n : max; }, 0);
-    const tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`;
+    let tid;
+    try { const { data, error } = await supabase.rpc("next_ticket_id"); tid = (!error && data) ? data : `TKT-${String(maxNum + 1).padStart(4,"0")}`; }
+    catch(e) { tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`; }
     const nt = {
       id: tid, type: "repair",
       customer_id: fid,
@@ -3778,7 +3799,9 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
     const fid = await resolveCustomer(); if (!fid) return;
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : device.manufacturer;
     const maxNum = tickets.reduce((max, t) => { const n = parseInt(t.id?.replace("TKT-","")) || 0; return n > max ? n : max; }, 0);
-    const tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`;
+    let tid;
+    try { const { data, error } = await supabase.rpc("next_ticket_id"); tid = (!error && data) ? data : `TKT-${String(maxNum + 1).padStart(4,"0")}`; }
+    catch(e) { tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`; }
     const firstItem = { id: genId("ai"), item: accItem.trim(), color: accColor.trim(), qty: parseInt(accQty)||1, price_incl_vat: ap, status: "pending" };
     const nt = {
       id: tid, type: "accessory",
