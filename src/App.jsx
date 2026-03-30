@@ -989,6 +989,27 @@ export default function RepairFlow() {
   const [dbReady,      setDbReady]      = useState(false);
   const [needsPassword, setNeedsPassword] = useState(false);
 
+  // ── Auto-logout after 4 hours of inactivity ──────────────────────────────
+  const inactivityTimer = useRef(null);
+  const INACTIVITY_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+  function resetInactivityTimer() {
+    clearTimeout(inactivityTimer.current);
+    inactivityTimer.current = setTimeout(() => {
+      supabase.auth.signOut();
+    }, INACTIVITY_MS);
+  }
+
+  useEffect(() => {
+    const events = ["mousedown", "keydown", "touchstart", "scroll"];
+    events.forEach(e => window.addEventListener(e, resetInactivityTimer, { passive: true }));
+    resetInactivityTimer(); // start timer on mount
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetInactivityTimer));
+      clearTimeout(inactivityTimer.current);
+    };
+  }, []);
+
   useEffect(() => {
     // Detect invite or password recovery links (hash contains type=invite or type=recovery)
     const hash = window.location.hash;
