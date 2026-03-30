@@ -2819,9 +2819,9 @@ function DashboardView({ tickets, customers, parts, openTicket, filterStatus, se
       {/* List table */}
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.05)" }}>
         {/* Header */}
-        <div style={{ display:"grid", gridTemplateColumns:"100px 90px 1fr 140px 110px 160px 90px 80px 40px 36px", background:T.surface2, borderBottom:`1px solid ${T.border}`, padding:"0" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"96px 100px minmax(0,1fr) 130px 100px 150px 76px 76px 36px 32px", background:T.surface2, borderBottom:`1px solid ${T.border}`, padding:"0" }}>
           {["Ticket","Device","Description","Customer","Price","Status","Warranty","Date","Tech",""].map(h => (
-            <div key={h} style={{ padding:"9px 12px", fontSize:9, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".08em" }}>{h}</div>
+            <div key={h} style={{ padding:"9px 10px", fontSize:9, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".08em", overflow:"hidden" }}>{h}</div>
           ))}
         </div>
 
@@ -2864,12 +2864,12 @@ function TicketRow({ ticket, customers, parts, onOpen, onStatusChange, onDelete,
   const accentC  = isAcc ? T.purple : T.pink;
 
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"100px 90px 1fr 140px 110px 160px 90px 80px 40px 36px", borderTop:`1px solid ${T.border}`, background: zebra ? T.surface2 : T.surface, alignItems:"center", minHeight:46 }}>
+    <div style={{ display:"grid", gridTemplateColumns:"96px 100px minmax(0,1fr) 130px 100px 150px 76px 76px 36px 32px", borderTop:`1px solid ${T.border}`, background: zebra ? T.surface2 : T.surface, alignItems:"center", minHeight:46 }}>
 
       {/* Ticket ID — clickable */}
-      <div onClick={onOpen} style={{ padding:"8px 12px", cursor:"pointer" }}>
-        <div style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, fontWeight:700, color:accentC }}>{ticket.id}</div>
-        <div style={{ fontSize:9, color:T.text3, marginTop:1 }}>
+      <div onClick={onOpen} style={{ padding:"8px 10px", cursor:"pointer", overflow:"hidden" }}>
+        <div style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, fontWeight:700, color:accentC, whiteSpace:"nowrap" }}>{ticket.id}</div>
+        <div style={{ fontSize:9, color:T.text3, marginTop:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
           {isAcc
             ? <span style={{ color:T.purple, fontWeight:700 }}>📦 ACC</span>
             : <>{CAT_ICON[ticket.device_category]} {ticket.device_manufacturer}</>
@@ -2878,17 +2878,17 @@ function TicketRow({ ticket, customers, parts, onOpen, onStatusChange, onDelete,
       </div>
 
       {/* Model / Item */}
-      <div onClick={onOpen} style={{ padding:"8px 12px", cursor:"pointer" }}>
-        <div style={{ fontSize:12, fontWeight:600, color:T.text, lineHeight:1.3 }}>
+      <div onClick={onOpen} style={{ padding:"8px 10px", cursor:"pointer", overflow:"hidden" }}>
+        <div style={{ fontSize:12, fontWeight:600, color:T.text, lineHeight:1.3, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
           {isAcc ? (ticket.acc_items?.[0]?.item || "—") : ticket.device_model}
         </div>
         {isAcc && ticket.acc_items?.[0]?.color && (
-          <div style={{ fontSize:10, color:T.text3 }}>{ticket.acc_items[0].color}</div>
+          <div style={{ fontSize:10, color:T.text3, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ticket.acc_items[0].color}</div>
         )}
       </div>
 
       {/* Description / Issue */}
-      <div onClick={onOpen} style={{ padding:"8px 12px", cursor:"pointer" }}>
+      <div onClick={onOpen} style={{ padding:"8px 10px", cursor:"pointer", minWidth:0, overflow:"hidden" }}>
         <div style={{ fontSize:12, color:T.text2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
           {isAcc
             ? (ticket.acc_items?.length > 1 ? `${ticket.acc_items.length} items` : ticket.acc_items?.[0]?.item || "—")
@@ -2899,25 +2899,25 @@ function TicketRow({ ticket, customers, parts, onOpen, onStatusChange, onDelete,
       </div>
 
       {/* Customer */}
-      <div style={{ padding:"8px 12px" }}>
+      <div style={{ padding:"8px 10px", overflow:"hidden" }}>
         <div style={{ fontSize:12, color:T.text, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cust?.name}</div>
         <div style={{ fontSize:10, color:T.text3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cust?.email}</div>
       </div>
 
       {/* Price */}
-      <div style={{ padding:"8px 12px" }}>
-        <div style={{ fontSize:13, fontWeight:800, color:T.pink }}>{fmtEur(ticket.initial_quote)}</div>
+      <div style={{ padding:"8px 10px" }}>
+        <div style={{ fontSize:12, fontWeight:800, color:T.pink }}>{fmtEur(ticket.initial_quote)}</div>
         <div style={{ fontSize:9, color:T.text3 }}>{fmtEur(exVat(ticket.initial_quote))} ALV0</div>
       </div>
 
       {/* Status dropdown — inline change */}
-      <div style={{ padding:"6px 8px" }}>
+      <div style={{ padding:"6px 6px" }}>
         <div style={{ position:"relative" }}>
           <select
             value={ticket.status}
             onChange={e => { e.stopPropagation(); onStatusChange(e.target.value); }}
             onClick={e => e.stopPropagation()}
-            style={{ width:"100%", background:info.bg, border:`1px solid ${info.color}44`, borderRadius:6, color:info.color, fontSize:10, fontWeight:700, padding:"4px 6px", cursor:"pointer", appearance:"auto" }}
+            style={{ width:"100%", background:info.bg, border:`1px solid ${info.color}44`, borderRadius:6, color:info.color, fontSize:10, fontWeight:700, padding:"4px 4px", cursor:"pointer", appearance:"auto" }}
           >
             {STATUSES.map(s => (
               <option key={s.key} value={s.key}>{s.key==="part_arrived"||s.key==="ready_for_pickup" ? "📬 "+s.label : s.label}</option>
@@ -2930,19 +2930,19 @@ function TicketRow({ ticket, customers, parts, onOpen, onStatusChange, onDelete,
       </div>
 
       {/* Warranty */}
-      <div style={{ padding:"8px 12px" }}>
+      <div style={{ padding:"8px 6px", textAlign:"center" }}>
         {ticket.warranty_months
           ? <span style={{ fontSize:11, color:T.green, fontWeight:600 }}>{ticket.warranty_months} kk</span>
           : <span style={{ fontSize:11, color:T.text3 }}>—</span>}
       </div>
 
       {/* Date */}
-      <div style={{ padding:"8px 12px" }}>
-        <div style={{ fontSize:10, color:T.text3 }}>{fmtDate(ticket.created_at)}</div>
+      <div style={{ padding:"8px 6px" }}>
+        <div style={{ fontSize:10, color:T.text3, whiteSpace:"nowrap" }}>{fmtDate(ticket.created_at)}</div>
       </div>
 
       {/* Tech avatar */}
-      <div style={{ padding:"4px 6px", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ padding:"4px 4px", display:"flex", alignItems:"center", justifyContent:"center" }}>
         {(() => {
           const tech = (technicians||[]).find(t => t.id===ticket.technician_id);
           return tech
@@ -2952,18 +2952,18 @@ function TicketRow({ ticket, customers, parts, onOpen, onStatusChange, onDelete,
       </div>
 
       {/* Delete */}
-      <div style={{ padding:"4px 6px", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ padding:"4px 4px", display:"flex", alignItems:"center", justifyContent:"center" }}>
         {confirmDel ? (
           <button
             onClick={e => { e.stopPropagation(); onDelete(); }}
             title="Confirm delete"
-            style={{ background:T.red, border:"none", borderRadius:5, padding:"3px 6px", color:"#fff", fontSize:10, fontWeight:700 }}
+            style={{ background:T.red, border:"none", borderRadius:5, padding:"3px 5px", color:"#fff", fontSize:10, fontWeight:700 }}
           >✕</button>
         ) : (
           <button
             onClick={e => { e.stopPropagation(); setConfirmDel(true); setTimeout(()=>setConfirmDel(false),3000); }}
             title="Delete ticket"
-            style={{ background:"transparent", border:`1px solid ${T.border}`, borderRadius:5, padding:"3px 6px", color:T.text3, fontSize:11 }}
+            style={{ background:"transparent", border:`1px solid ${T.border}`, borderRadius:5, padding:"3px 5px", color:T.text3, fontSize:11 }}
           >🗑</button>
         )}
       </div>
