@@ -3501,35 +3501,6 @@ function PartsOrderView({ tickets, setTickets, customers, parts, setParts, updat
         ))}
       </div>
 
-      {/* ── Low stock catalogue parts ── */}
-      {lowStockParts.length > 0 && (
-        <div style={{ marginBottom:16 }}>
-          <div style={{ fontSize:10, color:T.amber, letterSpacing:".08em", textTransform:"uppercase", marginBottom:8, fontWeight:700 }}>⚠️ Low stock — reorder suggested ({lowStockParts.length})</div>
-          <div style={{ background:T.surface, border:`1px solid ${T.amber}55`, borderRadius:10, overflow:"hidden" }}>
-            <PH cols={["Part","SKU","Supplier","Cost ex.VAT","In stock","Min stock","Action"]} sizes="2fr 110px 120px 90px 80px 80px 120px" />
-            {lowStockParts.map(c => (
-              <div key={c.id} style={{ display:"grid", gridTemplateColumns:"2fr 110px 120px 90px 80px 80px 120px", borderTop:`1px solid ${T.border}`, alignItems:"center", background:T.surface }}>
-                <PC>{c.name}</PC>
-                <PC mono small>{c.sku||"—"}</PC>
-                <PC small>{c.supplier||"—"}</PC>
-                <PC mono small pink>{fmtEur(c.cost)}</PC>
-                <PC center><span style={{ color:c.stock_qty===0?T.red:T.amber, fontWeight:800 }}>{c.stock_qty}</span></PC>
-                <PC center>{c.min_stock}</PC>
-                <PC>
-                  <button onClick={()=>{
-                    const qty = c.min_stock - c.stock_qty;
-                    setManualOrders(mo=>[...mo,{ id:genId("mo"), item_name:`Restock: ${c.name}`, supplier_sku:c.sku||"", qty, cost:c.cost, note:`Restock to min (${c.min_stock})`, status:"pending", created_at:new Date().toISOString() }]);
-                    toast(`Added restock order for ${c.name}`);
-                  }} style={{ background:T.amber, border:"none", borderRadius:5, padding:"4px 10px", color:"#fff", fontSize:10, fontWeight:700, cursor:"pointer" }}>
-                    + Restock order
-                  </button>
-                </PC>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ── Repair parts pending ── */}
       {pending.length > 0 && (
         <div style={{ marginBottom:16 }}>
@@ -3640,6 +3611,35 @@ function PartsOrderView({ tickets, setTickets, customers, parts, setParts, updat
                 <PC mono small>{fmtEur((parseFloat(m.cost)||0)*(1+VAT_RATE))}</PC>
                 <PC><button onClick={()=>markM(m.id,"arrived")} style={{ background:T.green, border:"none", borderRadius:5, padding:"4px 10px", color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>✓ Arrived</button></PC>
                 <PC><button onClick={()=>delM(m.id)} style={{ background:T.redBg, border:`1px solid ${T.red}33`, borderRadius:5, padding:"4px 7px", color:T.red, fontSize:12, cursor:"pointer" }} title="Remove">✕</button></PC>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Low stock catalogue parts ── */}
+      {lowStockParts.length > 0 && (
+        <div style={{ marginTop:24 }}>
+          <div style={{ fontSize:10, color:T.amber, letterSpacing:".08em", textTransform:"uppercase", marginBottom:8, fontWeight:700 }}>⚠️ Low stock — reorder suggested ({lowStockParts.length})</div>
+          <div style={{ background:T.surface, border:`1px solid ${T.amber}55`, borderRadius:10, overflow:"hidden" }}>
+            <PH cols={["Part","SKU","Supplier","Cost ex.VAT","In stock","Min stock","Action"]} sizes="2fr 110px 120px 90px 80px 80px 120px" />
+            {lowStockParts.map(c => (
+              <div key={c.id} style={{ display:"grid", gridTemplateColumns:"2fr 110px 120px 90px 80px 80px 120px", borderTop:`1px solid ${T.border}`, alignItems:"center", background:T.surface }}>
+                <PC>{c.name}</PC>
+                <PC mono small>{c.sku||"—"}</PC>
+                <PC small>{c.supplier||"—"}</PC>
+                <PC mono small pink>{fmtEur(c.cost)}</PC>
+                <PC center><span style={{ color:c.stock_qty===0?T.red:T.amber, fontWeight:800 }}>{c.stock_qty}</span></PC>
+                <PC center>{c.min_stock}</PC>
+                <PC>
+                  <button onClick={()=>{
+                    const qty = c.min_stock - c.stock_qty;
+                    setManualOrders(mo=>[...mo,{ id:genId("mo"), item_name:`Restock: ${c.name}`, supplier_sku:c.sku||"", qty, cost:c.cost, note:`Restock to min (${c.min_stock})`, status:"pending", created_at:new Date().toISOString() }]);
+                    toast(`Added restock order for ${c.name}`);
+                  }} style={{ background:T.amber, border:"none", borderRadius:5, padding:"4px 10px", color:"#fff", fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                    + Restock order
+                  </button>
+                </PC>
               </div>
             ))}
           </div>
