@@ -182,72 +182,196 @@ const WORKFLOW_PRESETS = [
 function buildReceiptHtml(ticket, customer, parts, mode) {
   const isThermal  = mode === "thermal";
   const isAcc      = ticket.type === "accessory";
-  const accentHex  = isAcc ? "#7C3AED" : "#D4175A";
+  const accentHex  = isAcc ? "#7C3AED" : "#C0185A";
   const w          = isThermal ? "302px" : "210mm";
   const ex         = exVat(ticket.initial_quote), vat = vatAmt(ticket.initial_quote);
-  const partsRows  = parts.map(p => `<tr><td>${p.part_name}</td><td style="text-align:right">${p.qty}×</td><td style="text-align:right">${fmtEur(p.cost * p.qty * (1+VAT_RATE))}</td></tr>`).join("");
-  const warrantyLine = (!isAcc && ticket.warranty_months) ? `<div style="margin-top:8px;font-weight:600;">Warranty: ${ticket.warranty_months} months from repair date</div>` : "";
+  const partsRows  = parts.map(p => `
+    <tr>
+      <td style="padding:5px 0;border-bottom:1px solid #f0f0f0">${p.part_name}</td>
+      <td style="text-align:center;padding:5px 8px;border-bottom:1px solid #f0f0f0;color:#777">${p.qty}×</td>
+      <td style="text-align:right;padding:5px 0;border-bottom:1px solid #f0f0f0">${fmtEur(p.cost * p.qty * (1+VAT_RATE))}</td>
+    </tr>`).join("");
+  const warrantyLine = (!isAcc && ticket.warranty_months)
+    ? `<div style="margin-top:10px;padding:8px 12px;background:#f0faf5;border-left:3px solid #1F8A55;border-radius:3px;font-size:11px;color:#1F8A55;font-weight:600">🛡 Warranty: ${ticket.warranty_months} months from repair date</div>` : "";
 
-  // Body content differs by type
   const accItemsList = (ticket.acc_items || []);
   const accItemRows = accItemsList.map(i =>
-    `<tr><td>${i.item}${i.color ? " <span style='color:#777;font-size:.9em'>– "+i.color+"</span>" : ""}</td><td style="text-align:right;color:#777">${i.qty}×</td><td style="text-align:right">${fmtEur(i.price_incl_vat*(i.qty||1))}</td></tr>`
+    `<tr>
+      <td style="padding:5px 0;border-bottom:1px solid #f0f0f0">${i.item}${i.color ? ` <span style='color:#999;font-size:.9em'>– ${i.color}</span>` : ""}</td>
+      <td style="text-align:center;padding:5px 8px;border-bottom:1px solid #f0f0f0;color:#777">${i.qty}×</td>
+      <td style="text-align:right;padding:5px 0;border-bottom:1px solid #f0f0f0">${fmtEur(i.price_incl_vat*(i.qty||1))}</td>
+    </tr>`
   ).join("");
+
   const bodyContent = isAcc ? `
-  <div class="lbl">Accessory Order</div>
-  ${ticket.device_model ? `<div class="val" style="color:#555;margin-bottom:6px">For: ${ticket.device_manufacturer ? ticket.device_manufacturer+" " : ""}${ticket.device_model}</div>` : ""}
-  <div class="hr-dash"/>
-  <div class="lbl">Items</div>
-  <table><tbody>${accItemRows}</tbody></table>
-  ${ticket.acc_notes ? `<div class="lbl" style="margin-top:8px">Notes</div><div class="val" style="color:#444">${ticket.acc_notes}</div>` : ""}
+    <div class="section-title">Accessory Order</div>
+    ${ticket.device_model ? `<div class="info-row"><span class="lbl">For device</span><span class="val">${ticket.device_manufacturer ? ticket.device_manufacturer+" " : ""}${ticket.device_model}</span></div>` : ""}
+    <div class="divider"/>
+    <div class="section-title">Items</div>
+    <table><tbody>${accItemRows}</tbody></table>
+    ${ticket.acc_notes ? `<div class="info-row" style="margin-top:8px"><span class="lbl">Notes</span><span class="val">${ticket.acc_notes}</span></div>` : ""}
   ` : `
-  <div class="lbl">Device</div>
-  <div class="val" style="font-weight:600">${ticket.device_manufacturer} ${ticket.device_model}</div>
-  ${ticket.serial_imei ? `<div style="font-family:monospace;font-size:10px;color:#555;margin-bottom:4px">S/N: ${ticket.serial_imei}</div>` : ""}
-  <div class="lbl" style="margin-top:6px">Reported issue</div>
-  <div class="val">${ticket.issue_desc}</div>
-  ${ticket.technician_notes ? `<div class="lbl" style="margin-top:4px">Technician notes</div><div class="val" style="color:#444">${ticket.technician_notes.replace(/\n/g,"<br/>")}</div>` : ""}
-  ${warrantyLine}
-  ${parts.length ? `<div class="hr-dash"/><div class="lbl">Parts / Materials</div><table><tbody>${partsRows}</tbody></table>` : ""}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
+      <div>
+        <div class="lbl">Device</div>
+        <div class="val-lg">${ticket.device_manufacturer} ${ticket.device_model}</div>
+        ${ticket.serial_imei ? `<div style="font-family:monospace;font-size:10px;color:#777;margin-top:2px">S/N: ${ticket.serial_imei}</div>` : ""}
+      </div>
+      <div>
+        <div class="lbl">Repair type</div>
+        <div class="val">${ticket.repair_type ? ticket.repair_type.replace(/_/g," ") : "—"}</div>
+      </div>
+    </div>
+    <div class="lbl">Reported issue</div>
+    <div class="val" style="background:#fafafa;border:1px solid #eee;border-radius:4px;padding:8px 10px;margin-bottom:10px">${ticket.issue_desc || "—"}</div>
+    ${ticket.technician_notes ? `<div class="lbl">Technician notes</div><div class="val" style="background:#fafafa;border:1px solid #eee;border-radius:4px;padding:8px 10px;margin-bottom:10px">${ticket.technician_notes.replace(/\n/g,"<br/>")}</div>` : ""}
+    ${warrantyLine}
+    ${parts.length ? `<div class="divider"/><div class="section-title">Parts / Materials</div><table><tbody>${partsRows}</tbody></table>` : ""}
   `;
 
+  if (isThermal) return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{width:302px;margin:0 auto;padding:10px 8px;font-family:Georgia,serif;font-size:11px;color:#1a1a1a;background:#fff}
+    .logo{font-family:sans-serif;font-weight:800;font-size:15px;color:${accentHex};margin-bottom:2px}
+    .lbl{font-family:sans-serif;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:1px}
+    .val{font-size:11px;margin-bottom:4px}
+    .val-lg{font-size:12px;font-weight:600;margin-bottom:4px}
+    .section-title{font-family:sans-serif;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin:8px 0 4px}
+    .divider{border:none;border-top:1px dashed #ccc;margin:7px 0}
+    table{width:100%;border-collapse:collapse;font-size:10px}
+    .tot td{font-weight:700;font-size:13px;padding-top:6px;border-top:2px solid #1a1a1a}
+    .foot{text-align:center;font-size:9px;color:#888;margin-top:14px;line-height:1.6}
+    .info-row{display:flex;justify-content:space-between;margin-bottom:4px}
+    @media print{body{margin:0;padding:8px}}
+  </style></head><body>
+  <div class="logo">⚙ ${SHOP_NAME}</div>
+  <div style="font-family:sans-serif;font-size:9px;color:#666;margin-bottom:8px;line-height:1.5">${SHOP_ADDR}<br>${SHOP_TEL} · ${SHOP_EMAIL}</div>
+  <hr style="border:none;border-top:1px solid #ccc;margin:7px 0"/>
+  <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+    <div><div class="lbl">Ticket</div><div style="font-family:monospace;font-weight:700;font-size:13px">${ticket.id}</div></div>
+    <div style="text-align:right"><div class="lbl">Date</div><div class="val">${fmtDate(new Date().toISOString(), true)}</div></div>
+  </div>
+  <div class="divider"/>
+  <div class="lbl">Customer</div>
+  <div class="val" style="font-weight:600">${customer.name}</div>
+  <div class="val" style="color:#555">${customer.email || ""}${customer.email && customer.phone ? " · " : ""}${customer.phone || ""}</div>
+  <div class="divider"/>
+  ${bodyContent}
+  <hr style="border:none;border-top:1px solid #ccc;margin:7px 0"/>
+  <table><tbody>
+    <tr><td style="color:#777">Excl. VAT</td><td style="text-align:right;color:#777">${fmtEur(ex)}</td></tr>
+    <tr><td style="color:#777">VAT ${(VAT_RATE*100).toFixed(1)}%</td><td style="text-align:right;color:#777">${fmtEur(vat)}</td></tr>
+    <tr class="tot"><td>Total</td><td style="text-align:right;color:${accentHex}">${fmtEur(ticket.initial_quote)}</td></tr>
+  </tbody></table>
+  <div class="foot">Kiitos! · ${SHOP_NAME}<br>${SHOP_ADDR}</div>
+  <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),800);}<\/script>
+  </body></html>`;
+
+  // ── A4 ──
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{width:${w};margin:0 auto;padding:${isThermal?"10px 8px":"20mm"};font-family:Georgia,serif;font-size:${isThermal?"11px":"12px"};color:#1a1a1a;background:#fff}
-    .logo{font-family:sans-serif;font-weight:800;font-size:${isThermal?"15px":"20px"};color:${accentHex};margin-bottom:2px}
-    .type-badge{display:inline-block;font-family:sans-serif;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;background:${accentHex}18;color:${accentHex};border:1px solid ${accentHex}44;border-radius:4px;padding:2px 7px;margin-bottom:${isThermal?"6px":"10px"}}
-    .sub{font-size:${isThermal?"9px":"10px"};color:#666;margin-bottom:${isThermal?"8px":"14px"};line-height:1.5}
-    hr{border:none;border-top:1px solid #ccc;margin:${isThermal?"7px 0":"12px 0"}}
-    .hr-dash{border:none;border-top:1px dashed #ccc;margin:${isThermal?"7px 0":"12px 0"}}
-    .lbl{font-family:sans-serif;font-size:${isThermal?"8px":"9px"};text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:2px}
-    .val{font-size:${isThermal?"11px":"12px"};margin-bottom:6px;line-height:1.5}
-    table{width:100%;border-collapse:collapse;font-size:${isThermal?"10px":"11px"}}
-    .tot td{font-weight:700;font-size:${isThermal?"13px":"14px"};padding-top:6px;border-top:2px solid #1a1a1a}
-    .foot{text-align:center;font-size:9px;color:#888;margin-top:16px;line-height:1.6}
-    @media print{body{margin:0;padding:${isThermal?"8px":"12mm"}}}
+    body{width:210mm;margin:0 auto;padding:16mm 18mm;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;padding-bottom:14px;border-bottom:3px solid ${accentHex}}
+    .logo-name{font-size:22px;font-weight:800;color:${accentHex};letter-spacing:-.5px}
+    .logo-sub{font-size:9px;color:#888;margin-top:2px;line-height:1.6}
+    .badge{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;background:${accentHex};color:#fff;border-radius:4px;padding:3px 10px;margin-bottom:6px}
+    .ticket-id{font-family:monospace;font-size:22px;font-weight:800;color:#1a1a1a}
+    .ticket-date{font-size:10px;color:#888;margin-top:3px}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px}
+    .box{background:#fafafa;border:1px solid #e8e8e8;border-radius:6px;padding:12px 14px}
+    .box-title{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#aaa;margin-bottom:8px}
+    .lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#aaa;margin-bottom:2px;margin-top:8px}
+    .lbl:first-child{margin-top:0}
+    .val{font-size:11px;color:#1a1a1a;line-height:1.5}
+    .val-lg{font-size:13px;font-weight:700;color:#1a1a1a}
+    .section-title{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#aaa;margin:14px 0 8px}
+    .divider{border:none;border-top:1px solid #eee;margin:14px 0}
+    .issue-box{background:#fafafa;border:1px solid #e8e8e8;border-left:3px solid ${accentHex};border-radius:4px;padding:10px 12px;font-size:11px;line-height:1.6;color:#333;margin-bottom:12px}
+    table{width:100%;border-collapse:collapse;font-size:11px}
+    thead th{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#aaa;padding:0 0 6px;border-bottom:1px solid #eee;text-align:left}
+    thead th:last-child{text-align:right}
+    thead th:nth-child(2){text-align:center}
+    .tot-row td{font-weight:700;font-size:13px;padding-top:8px;border-top:2px solid #1a1a1a;color:${accentHex}}
+    .sub-row td{color:#777;padding:2px 0}
+    .foot{text-align:center;font-size:9px;color:#aaa;margin-top:24px;padding-top:12px;border-top:1px solid #eee;line-height:1.8}
+    .sig-area{margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:40px}
+    .sig-line{border-top:1px solid #ccc;padding-top:6px;font-size:9px;color:#aaa;text-align:center}
+    @media print{body{margin:0;padding:12mm 14mm}@page{size:A4;margin:0}}
   </style></head><body>
-  <div class="logo">${isAcc?"📦":"⚙"} ${SHOP_NAME}</div>
-  <div class="type-badge">${isAcc ? "Accessory Order" : "Repair Ticket"}</div>
-  <div class="sub">${SHOP_ADDR}<br>${SHOP_TEL} · ${SHOP_EMAIL}<br>${SHOP_BIZ}</div>
-  <hr/>
-  <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-    <div><div class="lbl">Ticket</div><div style="font-family:monospace;font-weight:700;font-size:${isThermal?"13px":"16px"}">${ticket.id}</div></div>
-    <div style="text-align:right"><div class="lbl">Date</div><div class="val">${fmtDate(new Date().toISOString(), true)}</div></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="logo-name">${SHOP_NAME}</div>
+      <div class="logo-sub">${SHOP_ADDR}<br>${SHOP_TEL} · ${SHOP_EMAIL}<br>${SHOP_BIZ}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="badge">${isAcc ? "Accessory Order" : "Repair Ticket"}</div>
+      <div class="ticket-id">${ticket.id}</div>
+      <div class="ticket-date">${fmtDate(new Date().toISOString(), true)}</div>
+    </div>
   </div>
-  <div class="hr-dash"/>
-  <div class="lbl">Customer</div>
-  <div class="val" style="font-weight:600">${customer.name}</div>
-  <div class="val" style="color:#444">${customer.email || ""}${customer.email && customer.phone ? " · " : ""}${customer.phone || ""}</div>
-  <div class="hr-dash"/>
-  ${bodyContent}
-  <hr/>
-  <table><tbody>
-    <tr><td style="color:#555">Price (excl. VAT)</td><td style="text-align:right;color:#555">${fmtEur(ex)}</td></tr>
-    <tr><td style="color:#555">VAT ${(VAT_RATE * 100).toFixed(1)}%</td><td style="text-align:right;color:#555">${fmtEur(vat)}</td></tr>
-    <tr class="tot"><td>Total (incl. VAT)</td><td style="text-align:right;color:${accentHex}">${fmtEur(ticket.initial_quote)}</td></tr>
-  </tbody></table>
-  <div class="foot">Thank you! · ${SHOP_NAME}<br>${SHOP_ADDR}</div>
+
+  <!-- Customer + Device -->
+  <div class="two-col">
+    <div class="box">
+      <div class="box-title">Customer</div>
+      <div class="val-lg">${customer.name}</div>
+      ${customer.email ? `<div class="lbl">Email</div><div class="val">${customer.email}</div>` : ""}
+      ${customer.phone ? `<div class="lbl">Phone</div><div class="val">${customer.phone}</div>` : ""}
+    </div>
+    <div class="box">
+      <div class="box-title">${isAcc ? "Accessory Order" : "Device"}</div>
+      ${isAcc ? `
+        ${ticket.device_model ? `<div class="lbl">For device</div><div class="val-lg">${ticket.device_manufacturer||""} ${ticket.device_model}</div>` : ""}
+        ${ticket.acc_notes ? `<div class="lbl">Notes</div><div class="val">${ticket.acc_notes}</div>` : ""}
+      ` : `
+        <div class="val-lg">${ticket.device_manufacturer} ${ticket.device_model}</div>
+        ${ticket.serial_imei ? `<div class="lbl">IMEI / Serial</div><div class="val" style="font-family:monospace">${ticket.serial_imei}</div>` : ""}
+        ${ticket.repair_type ? `<div class="lbl">Repair type</div><div class="val">${ticket.repair_type.replace(/_/g," ")}</div>` : ""}
+        ${ticket.warranty_months ? `<div class="lbl">Warranty</div><div class="val" style="color:#1F8A55;font-weight:600">${ticket.warranty_months} months</div>` : ""}
+      `}
+    </div>
+  </div>
+
+  ${isAcc ? `
+    <div class="section-title">Items</div>
+    <table>
+      <thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Price (incl. VAT)</th></tr></thead>
+      <tbody>${accItemRows}</tbody>
+    </table>
+  ` : `
+    <div class="section-title">Reported issue</div>
+    <div class="issue-box">${ticket.issue_desc || "—"}</div>
+    ${ticket.technician_notes ? `<div class="section-title">Technician notes</div><div class="issue-box">${ticket.technician_notes.replace(/\n/g,"<br/>")}</div>` : ""}
+    ${parts.length ? `
+      <div class="section-title">Parts / Materials</div>
+      <table>
+        <thead><tr><th>Part</th><th style="text-align:center">Qty</th><th style="text-align:right">Price (incl. VAT)</th></tr></thead>
+        <tbody>${partsRows}</tbody>
+      </table>
+    ` : ""}
+  `}
+
+  <!-- Pricing -->
+  <div class="divider"/>
+  <table style="width:220px;margin-left:auto">
+    <tbody>
+      <tr class="sub-row"><td>Price excl. VAT</td><td style="text-align:right">${fmtEur(ex)}</td></tr>
+      <tr class="sub-row"><td>VAT ${(VAT_RATE*100).toFixed(1)}%</td><td style="text-align:right">${fmtEur(vat)}</td></tr>
+      <tr class="tot-row"><td>Total (incl. VAT)</td><td style="text-align:right">${fmtEur(ticket.initial_quote)}</td></tr>
+    </tbody>
+  </table>
+
+  <!-- Signature lines -->
+  <div class="sig-area">
+    <div class="sig-line">Customer signature</div>
+    <div class="sig-line">Received / Technician</div>
+  </div>
+
+  <div class="foot">${SHOP_NAME} · ${SHOP_ADDR} · ${SHOP_TEL} · ${SHOP_EMAIL} · ${SHOP_BIZ}</div>
   <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),800);}<\/script>
   </body></html>`;
 }
@@ -936,6 +1060,30 @@ export default function RepairFlow() {
       setDbReady(true);
     }
     loadAll();
+
+    // ── Real-time sync — keeps all tabs/computers in sync ──────────────────
+    const channel = supabase.channel("repairflow-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tickets" },
+        payload => {
+          if (payload.eventType === "INSERT") setTickets(ts => ts.some(t => t.id === payload.new.id) ? ts : [payload.new, ...ts]);
+          if (payload.eventType === "UPDATE") setTickets(ts => ts.map(t => t.id === payload.new.id ? payload.new : t));
+          if (payload.eventType === "DELETE") setTickets(ts => ts.filter(t => t.id !== payload.old.id));
+        })
+      .on("postgres_changes", { event: "*", schema: "public", table: "customers" },
+        payload => {
+          if (payload.eventType === "INSERT") setCustomers(cs => cs.some(c => c.id === payload.new.id) ? cs : [...cs, payload.new]);
+          if (payload.eventType === "UPDATE") setCustomers(cs => cs.map(c => c.id === payload.new.id ? payload.new : c));
+          if (payload.eventType === "DELETE") setCustomers(cs => cs.filter(c => c.id !== payload.old.id));
+        })
+      .on("postgres_changes", { event: "*", schema: "public", table: "parts" },
+        payload => {
+          if (payload.eventType === "INSERT") setParts(ps => ps.some(p => p.id === payload.new.id) ? ps : [...ps, payload.new]);
+          if (payload.eventType === "UPDATE") setParts(ps => ps.map(p => p.id === payload.new.id ? payload.new : p));
+          if (payload.eventType === "DELETE") setParts(ps => ps.filter(p => p.id !== payload.old.id));
+        })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [session?.user?.id]);
 
   function toast(msg, type="success") {
@@ -3176,7 +3324,12 @@ function PartsOrderView({ tickets, setTickets, customers, parts, setParts, updat
 
   // ── repair parts ──────────────────────────────────────────────────────────
   const pending  = parts.filter(p => p.part_status==="pending");
-  const ordered  = parts.filter(p => p.part_status==="ordered");
+  const DONE_STATUSES = ["repair_in_progress", "ready_for_pickup", "closed"];
+  const ordered  = parts.filter(p => {
+    if (p.part_status !== "ordered") return false;
+    const t = tickets.find(t => t.id === p.ticket_id);
+    return !t || !DONE_STATUSES.includes(t.status);
+  });
 
   // ── accessory order items (flat list across all acc tickets) ──────────────
   const accTickets = tickets.filter(t => t.type === "accessory");
