@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="7" fill="#C0185A"/>
+  <!-- Phone body — solid white -->
+  <rect x="7" y="3" width="18" height="26" rx="4" fill="white"/>
+  <!-- Screen cutout -->
+  <rect x="10" y="7" width="12" height="17" rx="2" fill="#C0185A" opacity="0.85"/>
+  <!-- Speaker/notch top -->
+  <rect x="12" y="4.5" width="8" height="2" rx="1" fill="#C0185A" opacity="0.4"/>
+  <!-- Home indicator bottom -->
+  <rect x="11" y="25" width="10" height="2" rx="1" fill="#C0185A" opacity="0.4"/>
+</svg>
