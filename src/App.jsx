@@ -818,7 +818,6 @@ const COUNTRY_CODES = [
 ];
 
 function PhoneInput({ value, onChange, style }) {
-  // Parse existing value into country code + local number
   const detect = (v) => {
     if (!v) return { cc: "+358", local: "" };
     const match = COUNTRY_CODES.find(c => v.startsWith(c.code));
@@ -827,22 +826,21 @@ function PhoneInput({ value, onChange, style }) {
     return { cc: "+358", local: v };
   };
   const parsed = detect(value);
-  const [cc,    setCc]    = React.useState(parsed.cc);
-  const [local, setLocal] = React.useState(parsed.local);
+  const [cc,    setCc]    = useState(parsed.cc);
+  const [local, setLocal] = useState(parsed.local);
 
   function handleCc(newCc) {
     setCc(newCc);
     onChange(newCc + local);
   }
   function handleLocal(e) {
-    // Strip leading zero if pasted
     const v = e.target.value.replace(/^0+/, "");
     setLocal(v);
     onChange(cc + v);
   }
 
   return (
-    <div style={{ display:"flex", gap:0, ...style }}>
+    <div style={{ display:"flex", gap:0, ...(style||{}) }}>
       <select value={cc} onChange={e => handleCc(e.target.value)}
         style={{ ...inp(), width:"auto", borderRadius:"6px 0 0 6px", borderRight:"none", fontSize:13, paddingRight:6, background:T.surface2, flexShrink:0 }}>
         {COUNTRY_CODES.map(c => (
@@ -853,7 +851,7 @@ function PhoneInput({ value, onChange, style }) {
         type="tel"
         value={local}
         onChange={handleLocal}
-        placeholder="40 1234567"
+        placeholder="401234567"
         style={{ ...inp(), flex:1, borderRadius:"0 6px 6px 0", fontSize:13 }}
       />
     </div>
