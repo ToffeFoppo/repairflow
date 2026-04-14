@@ -187,9 +187,9 @@ function buildReceiptHtml(ticket, customer, parts, mode) {
   const ex         = exVat(ticket.initial_quote), vat = vatAmt(ticket.initial_quote);
   const partsRows  = parts.map(p => `
     <tr>
-      <td style="padding:5px 0;border-bottom:1px solid #f0f0f0">${p.part_name}</td>
-      <td style="text-align:center;padding:5px 8px;border-bottom:1px solid #f0f0f0;color:#777">${p.qty}×</td>
-      <td style="text-align:right;padding:5px 0;border-bottom:1px solid #f0f0f0">${fmtEur(p.cost * p.qty * (1+VAT_RATE))}</td>
+      <td style="padding:5px 0;border-bottom:1px solid #ddd;color:#000">${p.part_name}</td>
+      <td style="text-align:center;padding:5px 8px;border-bottom:1px solid #ddd;color:#000">${p.qty}×</td>
+      <td style="text-align:right;padding:5px 0;border-bottom:1px solid #ddd;color:#000">${fmtEur(p.cost * p.qty * (1+VAT_RATE))}</td>
     </tr>`).join("");
   const warrantyLine = (!isAcc && ticket.warranty_months)
     ? `<div style="margin-top:10px;padding:8px 12px;background:#f0faf5;border-left:3px solid #1F8A55;border-radius:3px;font-size:11px;color:#1F8A55;font-weight:600">🛡 Warranty: ${ticket.warranty_months} months from repair date</div>` : "";
@@ -197,9 +197,9 @@ function buildReceiptHtml(ticket, customer, parts, mode) {
   const accItemsList = (ticket.acc_items || []);
   const accItemRows = accItemsList.map(i =>
     `<tr>
-      <td style="padding:5px 0;border-bottom:1px solid #f0f0f0">${i.item}${i.color ? ` <span style='color:#999;font-size:.9em'>– ${i.color}</span>` : ""}</td>
-      <td style="text-align:center;padding:5px 8px;border-bottom:1px solid #f0f0f0;color:#777">${i.qty}×</td>
-      <td style="text-align:right;padding:5px 0;border-bottom:1px solid #f0f0f0">${fmtEur(i.price_incl_vat*(i.qty||1))}</td>
+      <td style="padding:5px 0;border-bottom:1px solid #ddd;color:#000">${i.item}${i.color ? ` <span style='color:#000;font-size:.9em'>– ${i.color}</span>` : ""}</td>
+      <td style="text-align:center;padding:5px 8px;border-bottom:1px solid #ddd;color:#000">${i.qty}×</td>
+      <td style="text-align:right;padding:5px 0;border-bottom:1px solid #ddd;color:#000">${fmtEur(i.price_incl_vat*(i.qty||1))}</td>
     </tr>`
   ).join("");
 
@@ -272,32 +272,32 @@ function buildReceiptHtml(ticket, customer, parts, mode) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{width:210mm;margin:0 auto;padding:16mm 18mm;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
+    body{width:210mm;margin:0 auto;padding:16mm 18mm;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#000;background:#fff}
     .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;padding-bottom:14px;border-bottom:3px solid ${accentHex}}
     .logo-name{font-size:22px;font-weight:800;color:${accentHex};letter-spacing:-.5px}
-    .logo-sub{font-size:9px;color:#888;margin-top:2px;line-height:1.6}
+    .logo-sub{font-size:9px;color:#000;margin-top:2px;line-height:1.6}
     .badge{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;background:${accentHex};color:#fff;border-radius:4px;padding:3px 10px;margin-bottom:6px}
-    .ticket-id{font-family:monospace;font-size:22px;font-weight:800;color:#1a1a1a}
-    .ticket-date{font-size:10px;color:#888;margin-top:3px}
+    .ticket-id{font-family:monospace;font-size:22px;font-weight:800;color:#000}
+    .ticket-date{font-size:10px;color:#000;margin-top:3px}
     .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px}
-    .box{background:#fafafa;border:1px solid #e8e8e8;border-radius:6px;padding:12px 14px}
-    .box-title{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#aaa;margin-bottom:8px}
-    .lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#aaa;margin-bottom:2px;margin-top:8px}
+    .box{background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:12px 14px}
+    .box-title{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#000;margin-bottom:8px}
+    .lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#000;margin-bottom:2px;margin-top:8px}
     .lbl:first-child{margin-top:0}
-    .val{font-size:11px;color:#1a1a1a;line-height:1.5}
-    .val-lg{font-size:13px;font-weight:700;color:#1a1a1a}
-    .section-title{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#aaa;margin:14px 0 8px}
-    .divider{border:none;border-top:1px solid #eee;margin:14px 0}
-    .issue-box{background:#fafafa;border:1px solid #e8e8e8;border-left:3px solid ${accentHex};border-radius:4px;padding:10px 12px;font-size:11px;line-height:1.6;color:#333;margin-bottom:12px}
+    .val{font-size:11px;color:#000;line-height:1.5}
+    .val-lg{font-size:13px;font-weight:700;color:#000}
+    .section-title{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#000;margin:14px 0 8px}
+    .divider{border:none;border-top:1px solid #ccc;margin:14px 0}
+    .issue-box{background:#f5f5f5;border:1px solid #ddd;border-left:3px solid ${accentHex};border-radius:4px;padding:10px 12px;font-size:11px;line-height:1.6;color:#000;margin-bottom:12px}
     table{width:100%;border-collapse:collapse;font-size:11px}
-    thead th{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#aaa;padding:0 0 6px;border-bottom:1px solid #eee;text-align:left}
+    thead th{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#000;padding:0 0 6px;border-bottom:1px solid #ccc;text-align:left}
     thead th:last-child{text-align:right}
     thead th:nth-child(2){text-align:center}
-    .tot-row td{font-weight:700;font-size:13px;padding-top:8px;border-top:2px solid #1a1a1a;color:${accentHex}}
-    .sub-row td{color:#777;padding:2px 0}
-    .foot{text-align:center;font-size:9px;color:#aaa;margin-top:24px;padding-top:12px;border-top:1px solid #eee;line-height:1.8}
+    .tot-row td{font-weight:700;font-size:13px;padding-top:8px;border-top:2px solid #000;color:${accentHex}}
+    .sub-row td{color:#000;padding:2px 0}
+    .foot{text-align:center;font-size:9px;color:#000;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;line-height:1.8}
     .sig-area{margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:40px}
-    .sig-line{border-top:1px solid #ccc;padding-top:6px;font-size:9px;color:#aaa;text-align:center}
+    .sig-line{border-top:1px solid #999;padding-top:6px;font-size:9px;color:#000;text-align:center}
     @media print{body{margin:0;padding:12mm 14mm}@page{size:A4;margin:0}}
   </style></head><body>
 
@@ -802,6 +802,64 @@ function DeviceSelector({ value, onChange, allModels, setAllModels }) {
 }
 
 // ─── VAT BOX ─────────────────────────────────────────────────────────────────
+// ─── PHONE INPUT WITH COUNTRY CODE ────────────────────────────────────────────
+const COUNTRY_CODES = [
+  { code:"+358", flag:"🇫🇮", name:"Finland"      },
+  { code:"+46",  flag:"🇸🇪", name:"Sweden"       },
+  { code:"+47",  flag:"🇳🇴", name:"Norway"       },
+  { code:"+45",  flag:"🇩🇰", name:"Denmark"      },
+  { code:"+372", flag:"🇪🇪", name:"Estonia"      },
+  { code:"+371", flag:"🇱🇻", name:"Latvia"       },
+  { code:"+370", flag:"🇱🇹", name:"Lithuania"    },
+  { code:"+49",  flag:"🇩🇪", name:"Germany"      },
+  { code:"+44",  flag:"🇬🇧", name:"UK"           },
+  { code:"+33",  flag:"🇫🇷", name:"France"       },
+  { code:"+1",   flag:"🇺🇸", name:"USA/Canada"   },
+];
+
+function PhoneInput({ value, onChange, style }) {
+  // Parse existing value into country code + local number
+  const detect = (v) => {
+    if (!v) return { cc: "+358", local: "" };
+    const match = COUNTRY_CODES.find(c => v.startsWith(c.code));
+    if (match) return { cc: match.code, local: v.slice(match.code.length).replace(/^\s/, "") };
+    if (v.startsWith("0")) return { cc: "+358", local: v.slice(1) };
+    return { cc: "+358", local: v };
+  };
+  const parsed = detect(value);
+  const [cc,    setCc]    = React.useState(parsed.cc);
+  const [local, setLocal] = React.useState(parsed.local);
+
+  function handleCc(newCc) {
+    setCc(newCc);
+    onChange(newCc + local);
+  }
+  function handleLocal(e) {
+    // Strip leading zero if pasted
+    const v = e.target.value.replace(/^0+/, "");
+    setLocal(v);
+    onChange(cc + v);
+  }
+
+  return (
+    <div style={{ display:"flex", gap:0, ...style }}>
+      <select value={cc} onChange={e => handleCc(e.target.value)}
+        style={{ ...inp(), width:"auto", borderRadius:"6px 0 0 6px", borderRight:"none", fontSize:13, paddingRight:6, background:T.surface2, flexShrink:0 }}>
+        {COUNTRY_CODES.map(c => (
+          <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
+        ))}
+      </select>
+      <input
+        type="tel"
+        value={local}
+        onChange={handleLocal}
+        placeholder="40 1234567"
+        style={{ ...inp(), flex:1, borderRadius:"0 6px 6px 0", fontSize:13 }}
+      />
+    </div>
+  );
+}
+
 function VatBox({ total, inline }) {
   const ex = exVat(total), vat = vatAmt(total);
   if (inline) return <span style={{ fontSize:11, color:T.text2 }}>{fmtEur(ex)} + ALV {(VAT_RATE*100).toFixed(1)}%</span>;
@@ -870,7 +928,9 @@ function PriceEditor({ ticket, save }) {
         </div>
       )}
       {!editing && ticket.initial_quote > 0 && (
-        <div style={{ marginTop:8 }}><VatBox total={ticket.initial_quote} /></div>
+        <div style={{ marginTop:4, fontSize:11, color:T.text3 }}>
+          {fmtEur(exVat(ticket.initial_quote))} + ALV {(VAT_RATE*100).toFixed(1)}% = {fmtEur(ticket.initial_quote)}
+        </div>
       )}
     </div>
   );
@@ -1102,6 +1162,10 @@ export default function RepairFlow() {
           if (payload.eventType === "UPDATE") setParts(ps => ps.map(p => p.id === payload.new.id ? payload.new : p));
           if (payload.eventType === "DELETE") setParts(ps => ps.filter(p => p.id !== payload.old.id));
         })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "logs" },
+        payload => {
+          setLogs(ls => ls.some(l => l.id === payload.new.id) ? ls : [payload.new, ...ls]);
+        })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -1208,7 +1272,11 @@ export default function RepairFlow() {
 
   // ── Supabase db helpers (passed to child views) ─────────────────────────────
   const db = {
-    async saveTicket(t)   { const {error} = await supabase.from("tickets").upsert(t); if(error) console.error("saveTicket",error); },
+    async saveTicket(t) {
+      // Always INSERT new tickets, never upsert (upsert overwrites fields from stale memory)
+      const { error } = await supabase.from("tickets").insert(t);
+      if (error) console.error("saveTicket insert:", error);
+    },
     async saveCustomer(c) { const {error} = await supabase.from("customers").upsert(c); if(error) console.error("saveCustomer",error); },
     async savePart(p)     { const {error} = await supabase.from("parts").upsert(p); if(error) console.error("savePart",error); },
     async deletePart(id)  { const {error} = await supabase.from("parts").delete().eq("id",id); if(error) console.error("deletePart",error); },
@@ -2907,7 +2975,6 @@ function TicketRow({ ticket, customers, parts, onOpen, onStatusChange, onDelete,
       {/* Price */}
       <div style={{ padding:"8px 10px" }}>
         <div style={{ fontSize:12, fontWeight:800, color:T.pink }}>{fmtEur(ticket.initial_quote)}</div>
-        <div style={{ fontSize:9, color:T.text3 }}>{fmtEur(exVat(ticket.initial_quote))} ALV0</div>
       </div>
 
       {/* Status dropdown — inline change */}
@@ -2991,10 +3058,11 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
 
   async function addNote() {
     if (!newNote.trim()) return;
-    const updated = tickets.map(t => t.id===ticketId ? { ...t, technician_notes:t.technician_notes+(t.technician_notes?"\n":"")+`[${new Date().toLocaleTimeString("fi-FI")}] ${newNote}` } : t);
-    setTickets(updated);
-    const t = updated.find(t => t.id===ticketId);
-    await db.saveTicket(t);
+    const existing = tickets.find(t => t.id===ticketId);
+    const stamp = new Date().toLocaleDateString("fi-FI") + " " + new Date().toLocaleTimeString("fi-FI", {hour:"2-digit", minute:"2-digit"});
+    const updatedNotes = (existing?.technician_notes ? existing.technician_notes + "\n" : "") + `[${stamp}] ${newNote}`;
+    setTickets(ts => ts.map(t => t.id===ticketId ? { ...t, technician_notes: updatedNotes } : t));
+    await supabase.from("tickets").update({ technician_notes: updatedNotes }).eq("id", ticketId);
     setNewNote(""); toast("Note added");
   }
   async function addPartFromCatalogue(catPart, qty) {
@@ -3292,7 +3360,7 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
                 style={{ background:"none", border:`1px solid ${T.border}`, borderRadius:5, padding:"3px 7px", color:T.red, fontSize:11, flexShrink:0 }}>✕</button>
             </div>
           ))}
-          {tParts.length > 0 && <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${T.border}` }}><VatBox total={tParts.reduce((s,p)=>s+p.cost*p.qty,0)*(1+VAT_RATE)} /></div>}
+          {tParts.length > 0 && <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${T.border}`, fontSize:12, fontWeight:700, color:T.text, textAlign:"right" }}>Parts total: {fmtEur(tParts.reduce((s,p)=>s+p.cost*p.qty,0)*(1+VAT_RATE))}</div>}
         </Sec>
 
         {/* Notes */}
@@ -3795,7 +3863,6 @@ function CustomersView({ customers, setCustomers, tickets, openTicket, db, toast
                 {[
                   { label:"Full name",    key:"name",  type:"text",  req:true  },
                   { label:"Email",        key:"email", type:"email", req:false },
-                  { label:"Phone",        key:"phone", type:"tel",   req:false },
                   { label:"Address",      key:"address",type:"text", req:false },
                   { label:"Notes",        key:"notes", type:"textarea",req:false },
                 ].map(f => (
@@ -3809,6 +3876,10 @@ function CustomersView({ customers, setCustomers, tickets, openTicket, db, toast
                     }
                   </div>
                 ))}
+                <div>
+                  <div style={{ fontSize:11, fontWeight:600, color:T.text2, marginBottom:4 }}>Phone</div>
+                  <PhoneInput value={draft.phone||""} onChange={v=>setDraft(d=>({...d,phone:v}))} style={{ width:"100%" }} />
+                </div>
                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                   <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:T.text, cursor:"pointer" }}>
                     <input type="checkbox" checked={!!draft.sms_opt_in} onChange={e=>setDraft(d=>({...d,sms_opt_in:e.target.checked}))} />
@@ -4040,8 +4111,7 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
               <input placeholder="Email" value={nc.email}
                 onChange={e=>setNc(c=>({...c,email:e.target.value}))} style={inp()} />
-              <input placeholder="Phone" value={nc.phone}
-                onChange={e=>setNc(c=>({...c,phone:e.target.value}))} style={inp()} />
+              <PhoneInput value={nc.phone} onChange={v=>setNc(c=>({...c,phone:v}))} />
             </div>
             <label style={{ fontSize:12, color:T.text2, display:"flex", alignItems:"center", gap:6, cursor:"pointer" }}>
               <input type="checkbox" checked={nc.sms_opt_in}
@@ -4112,8 +4182,7 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
             rows={3} style={{ ...inp(), width:"100%", resize:"vertical", marginBottom:8 }} />
           <input placeholder="Estimated price (€ incl. 25.5% VAT)" type="number" step="0.01"
             value={quote} onChange={e=>setQuote(e.target.value)}
-            style={{ ...inp(), width:"100%", marginBottom:q>0?8:0 }} />
-          {q > 0 && <VatBox total={q} />}
+            style={{ ...inp(), width:"100%", marginBottom:8 }} />
         </Sec>
 
         <Sec title={<span style={accentBar}>🛡 Warranty</span>}>
@@ -4472,8 +4541,8 @@ function AccOrderDetail({ ticket, ticketId, cust, tLogs, setTickets, newNote, se
               ))}
 
               {accItems.length > 0 && (
-                <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${T.border}` }}>
-                  <VatBox total={totalInclVat} />
+                <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${T.border}`, fontSize:12, fontWeight:700, color:T.text, textAlign:"right" }}>
+                  Total: {fmtEur(totalInclVat)}
                 </div>
               )}
             </Sec>
