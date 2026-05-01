@@ -1251,6 +1251,16 @@ export default function RepairFlow() {
     setParts(updatedParts);
     await supabase.from("parts").update({ part_status: newStatus }).eq("id", partId);
 
+    if (newStatus === "ordered" && ticket) {
+      const ticketParts = updatedParts.filter(p => p.ticket_id === ticket.id);
+      const allOrdered  = ticketParts.every(p => p.part_status === "ordered" || p.part_status === "arrived");
+      if (allOrdered && ticket.status === "intake") {
+        setTickets(ts => ts.map(t => t.id === ticket.id ? { ...t, status: "part_ordered" } : t));
+        await supabase.from("tickets").update({ status: "part_ordered" }).eq("id", ticket.id);
+        toast(`All parts ordered — ticket moved to Part Ordered`);
+      }
+    }
+
     if (newStatus === "arrived" && ticket && cust) {
       const ticketParts = updatedParts.filter(p => p.ticket_id === ticket.id);
       const allArrived  = ticketParts.every(p => p.part_status === "arrived");
@@ -2885,7 +2895,7 @@ function DashboardView({ tickets, customers, parts, openTicket, filterStatus, se
       {/* List table */}
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.05)" }}>
         {/* Header */}
-        <div style={{ display:"grid", gridTemplateColumns:"96px 100px minmax(0,1fr) 130px 100px 150px 76px 76px 36px 32px", background:T.surface2, borderBottom:`1px solid ${T.border}`, padding:"0" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"96px 150px minmax(0,0.6fr) 130px 100px 150px 76px 76px 36px 32px", background:T.surface2, borderBottom:`1px solid ${T.border}`, padding:"0" }}>
           {["Ticket","Device","Description","Customer","Price","Status","Warranty","Date","Tech",""].map(h => (
             <div key={h} style={{ padding:"9px 10px", fontSize:9, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".08em", overflow:"hidden" }}>{h}</div>
           ))}
@@ -2930,7 +2940,7 @@ function TicketRow({ ticket, customers, parts, onOpen, onStatusChange, onDelete,
   const accentC  = isAcc ? T.purple : T.pink;
 
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"96px 100px minmax(0,1fr) 130px 100px 150px 76px 76px 36px 32px", borderTop:`1px solid ${T.border}`, background: zebra ? T.surface2 : T.surface, alignItems:"center", minHeight:46 }}>
+    <div style={{ display:"grid", gridTemplateColumns:"96px 150px minmax(0,0.6fr) 130px 100px 150px 76px 76px 36px 32px", borderTop:`1px solid ${T.border}`, background: zebra ? T.surface2 : T.surface, alignItems:"center", minHeight:46 }}>
 
       {/* Ticket ID — clickable */}
       <div onClick={onOpen} style={{ padding:"8px 10px", cursor:"pointer", overflow:"hidden" }}>
@@ -4017,10 +4027,9 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
     const fid = await resolveCustomer(); if (!fid) return;
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : (device.manufacturer || "Other");
     const finalIssue  = issue.trim() || REPAIR_TYPES.find(r=>r.value===repairType)?.label || "";
-    const maxNum = tickets.reduce((max, t) => { const n = parseInt(t.id?.replace("TKT-","")) || 0; return n > max ? n : max; }, 0);
-    let tid;
-    try { const { data, error } = await supabase.rpc("next_ticket_id"); tid = (!error && data) ? data : `TKT-${String(maxNum + 1).padStart(4,"0")}`; }
-    catch(e) { tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`; }
+    const { data: tidData, error: tidErr } = await supabase.rpc("next_ticket_id");
+    if (tidErr || !tidData) { toast("Could not generate ticket ID, please try again", "error"); return; }
+    const tid = tidData;
     const nt = {
       id: tid, type: "repair",
       customer_id: fid,
@@ -4041,10 +4050,9 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
     const model = device.model || device.customModel;
     const fid = await resolveCustomer(); if (!fid) return;
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : device.manufacturer;
-    const maxNum = tickets.reduce((max, t) => { const n = parseInt(t.id?.replace("TKT-","")) || 0; return n > max ? n : max; }, 0);
-    let tid;
-    try { const { data, error } = await supabase.rpc("next_ticket_id"); tid = (!error && data) ? data : `TKT-${String(maxNum + 1).padStart(4,"0")}`; }
-    catch(e) { tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`; }
+    const { data: tidData, error: tidErr } = await supabase.rpc("next_ticket_id");
+    if (tidErr || !tidData) { toast("Could not generate ticket ID, please try again", "error"); return; }
+    const tid = tidData;
     const firstItem = { id: genId("ai"), item: accItem.trim(), color: accColor.trim(), qty: parseInt(accQty)||1, price_incl_vat: ap, status: "pending" };
     const nt = {
       id: tid, type: "accessory",
