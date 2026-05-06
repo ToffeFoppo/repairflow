@@ -252,7 +252,7 @@ function buildReceiptHtml(ticket, customer, parts, mode, lang="fi") {
   <hr style="border:none;border-top:1px solid #ccc;margin:7px 0"/>
   <div style="display:flex;justify-content:space-between;margin-bottom:6px">
     <div><div class="lbl">Ticket</div><div style="font-family:monospace;font-weight:700;font-size:13px">${ticket.id}</div></div>
-    <div style="text-align:right"><div class="lbl">Date</div><div class="val">${fmtDate(new Date().toISOString(), true)}</div></div>
+    <div style="text-align:right"><div class="lbl">Date</div><div class="val">${fmtDate(ticket.created_at, true)}</div></div>
   </div>
   <div class="divider"/>
   <div class="lbl">Customer</div>
@@ -312,7 +312,7 @@ function buildReceiptHtml(ticket, customer, parts, mode, lang="fi") {
     <div style="text-align:right">
       <div class="badge">${isAcc ? T2.accessoryOrder : T2.repairTicket}</div>
       <div class="ticket-id">${ticket.id}</div>
-      <div class="ticket-date">${fmtDate(new Date().toISOString(), true)}</div>
+      <div class="ticket-date">${fmtDate(ticket.created_at, true)}</div>
     </div>
   </div>
 
