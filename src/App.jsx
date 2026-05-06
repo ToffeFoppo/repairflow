@@ -179,20 +179,22 @@ const WORKFLOW_PRESETS = [
 
 
 // ─── PRINT (note: opens popup — blocked in artifact preview, works in real browser) ──
-function buildReceiptHtml(ticket, customer, parts, mode) {
+function buildReceiptHtml(ticket, customer, parts, mode, lang="fi") {
   const isThermal  = mode === "thermal";
   const isAcc      = ticket.type === "accessory";
   const accentHex  = isAcc ? "#7C3AED" : "#C0185A";
-  const w          = isThermal ? "302px" : "210mm";
   const ex         = exVat(ticket.initial_quote), vat = vatAmt(ticket.initial_quote);
+  const T2         = RECEIPT_LANGS[lang] || RECEIPT_LANGS.fi;
+
   const partsRows  = parts.map(p => `
     <tr>
       <td style="padding:5px 0;border-bottom:1px solid #ddd;color:#000">${p.part_name}</td>
       <td style="text-align:center;padding:5px 8px;border-bottom:1px solid #ddd;color:#000">${p.qty}×</td>
       <td style="text-align:right;padding:5px 0;border-bottom:1px solid #ddd;color:#000">${fmtEur(p.cost * p.qty * (1+VAT_RATE))}</td>
     </tr>`).join("");
+
   const warrantyLine = (!isAcc && ticket.warranty_months)
-    ? `<div style="margin-top:10px;padding:8px 12px;background:#f0faf5;border-left:3px solid #1F8A55;border-radius:3px;font-size:11px;color:#1F8A55;font-weight:600">🛡 Warranty: ${ticket.warranty_months} months from repair date</div>` : "";
+    ? `<div style="margin-top:10px;padding:8px 12px;background:#f0faf5;border-left:3px solid #1F8A55;border-radius:3px;font-size:11px;color:#1F8A55;font-weight:600">🛡 ${T2.warranty}: ${ticket.warranty_months} ${T2.months}</div>` : "";
 
   const accItemsList = (ticket.acc_items || []);
   const accItemRows = accItemsList.map(i =>
@@ -204,29 +206,29 @@ function buildReceiptHtml(ticket, customer, parts, mode) {
   ).join("");
 
   const bodyContent = isAcc ? `
-    <div class="section-title">Accessory Order</div>
-    ${ticket.device_model ? `<div class="info-row"><span class="lbl">For device</span><span class="val">${ticket.device_manufacturer ? ticket.device_manufacturer+" " : ""}${ticket.device_model}</span></div>` : ""}
+    <div class="section-title">${T2.accessoryOrder}</div>
+    ${ticket.device_model ? `<div class="info-row"><span class="lbl">${T2.forDevice}</span><span class="val">${ticket.device_manufacturer ? ticket.device_manufacturer+" " : ""}${ticket.device_model}</span></div>` : ""}
     <div class="divider"/>
-    <div class="section-title">Items</div>
+    <div class="section-title">${T2.items}</div>
     <table><tbody>${accItemRows}</tbody></table>
-    ${ticket.acc_notes ? `<div class="info-row" style="margin-top:8px"><span class="lbl">Notes</span><span class="val">${ticket.acc_notes}</span></div>` : ""}
+    ${ticket.acc_notes ? `<div class="info-row" style="margin-top:8px"><span class="lbl">${T2.notes}</span><span class="val">${ticket.acc_notes}</span></div>` : ""}
   ` : `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
       <div>
-        <div class="lbl">Device</div>
+        <div class="lbl">${T2.device}</div>
         <div class="val-lg">${ticket.device_manufacturer} ${ticket.device_model}</div>
-        ${ticket.serial_imei ? `<div style="font-family:monospace;font-size:10px;color:#777;margin-top:2px">S/N: ${ticket.serial_imei}</div>` : ""}
+        ${ticket.serial_imei ? `<div style="font-family:monospace;font-size:10px;color:#000;margin-top:2px">${T2.serialImei}: ${ticket.serial_imei}</div>` : ""}
       </div>
       <div>
-        <div class="lbl">Repair type</div>
+        <div class="lbl">${T2.repairType}</div>
         <div class="val">${ticket.repair_type ? ticket.repair_type.replace(/_/g," ") : "—"}</div>
       </div>
     </div>
-    <div class="lbl">Reported issue</div>
-    <div class="val" style="background:#fafafa;border:1px solid #eee;border-radius:4px;padding:8px 10px;margin-bottom:10px">${ticket.issue_desc || "—"}</div>
-    ${ticket.technician_notes ? `<div class="lbl">Technician notes</div><div class="val" style="background:#fafafa;border:1px solid #eee;border-radius:4px;padding:8px 10px;margin-bottom:10px">${ticket.technician_notes.replace(/\n/g,"<br/>")}</div>` : ""}
+    <div class="lbl">${T2.reportedIssue}</div>
+    <div class="val" style="background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:8px 10px;margin-bottom:10px">${ticket.issue_desc || "—"}</div>
+    ${ticket.technician_notes ? `<div class="lbl">${T2.technicianNotes}</div><div class="val" style="background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:8px 10px;margin-bottom:10px">${ticket.technician_notes.replace(/\n/g,"<br/>")}</div>` : ""}
     ${warrantyLine}
-    ${parts.length ? `<div class="divider"/><div class="section-title">Parts / Materials</div><table><tbody>${partsRows}</tbody></table>` : ""}
+    ${parts.length ? `<div class="divider"/><div class="section-title">${T2.parts}</div><table><thead><tr><th>${T2.part}</th><th style="text-align:center">${T2.qty}</th><th style="text-align:right">${T2.price}</th></tr></thead><tbody>${partsRows}</tbody></table>` : ""}
   `;
 
   if (isThermal) return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
@@ -308,7 +310,7 @@ function buildReceiptHtml(ticket, customer, parts, mode) {
       <div class="logo-sub">${SHOP_ADDR}<br>${SHOP_TEL} · ${SHOP_EMAIL}<br>${SHOP_BIZ}</div>
     </div>
     <div style="text-align:right">
-      <div class="badge">${isAcc ? "Accessory Order" : "Repair Ticket"}</div>
+      <div class="badge">${isAcc ? T2.accessoryOrder : T2.repairTicket}</div>
       <div class="ticket-id">${ticket.id}</div>
       <div class="ticket-date">${fmtDate(new Date().toISOString(), true)}</div>
     </div>
@@ -317,39 +319,39 @@ function buildReceiptHtml(ticket, customer, parts, mode) {
   <!-- Customer + Device -->
   <div class="two-col">
     <div class="box">
-      <div class="box-title">Customer</div>
+      <div class="box-title">${T2.customer}</div>
       <div class="val-lg">${customer.name}</div>
-      ${customer.email ? `<div class="lbl">Email</div><div class="val">${customer.email}</div>` : ""}
-      ${customer.phone ? `<div class="lbl">Phone</div><div class="val">${customer.phone}</div>` : ""}
+      ${customer.email ? `<div class="lbl">${T2.email}</div><div class="val">${customer.email}</div>` : ""}
+      ${customer.phone ? `<div class="lbl">${T2.phone}</div><div class="val">${customer.phone}</div>` : ""}
     </div>
     <div class="box">
-      <div class="box-title">${isAcc ? "Accessory Order" : "Device"}</div>
+      <div class="box-title">${isAcc ? T2.accessoryOrder : T2.device}</div>
       ${isAcc ? `
-        ${ticket.device_model ? `<div class="lbl">For device</div><div class="val-lg">${ticket.device_manufacturer||""} ${ticket.device_model}</div>` : ""}
-        ${ticket.acc_notes ? `<div class="lbl">Notes</div><div class="val">${ticket.acc_notes}</div>` : ""}
+        ${ticket.device_model ? `<div class="lbl">${T2.forDevice}</div><div class="val-lg">${ticket.device_manufacturer||""} ${ticket.device_model}</div>` : ""}
+        ${ticket.acc_notes ? `<div class="lbl">${T2.notes}</div><div class="val">${ticket.acc_notes}</div>` : ""}
       ` : `
         <div class="val-lg">${ticket.device_manufacturer} ${ticket.device_model}</div>
-        ${ticket.serial_imei ? `<div class="lbl">IMEI / Serial</div><div class="val" style="font-family:monospace">${ticket.serial_imei}</div>` : ""}
-        ${ticket.repair_type ? `<div class="lbl">Repair type</div><div class="val">${ticket.repair_type.replace(/_/g," ")}</div>` : ""}
-        ${ticket.warranty_months ? `<div class="lbl">Warranty</div><div class="val" style="color:#1F8A55;font-weight:600">${ticket.warranty_months} months</div>` : ""}
+        ${ticket.serial_imei ? `<div class="lbl">${T2.serialImei}</div><div class="val" style="font-family:monospace">${ticket.serial_imei}</div>` : ""}
+        ${ticket.repair_type ? `<div class="lbl">${T2.repairType}</div><div class="val">${ticket.repair_type.replace(/_/g," ")}</div>` : ""}
+        ${ticket.warranty_months ? `<div class="lbl">${T2.warranty}</div><div class="val" style="color:#1F8A55;font-weight:600">${ticket.warranty_months} ${T2.months}</div>` : ""}
       `}
     </div>
   </div>
 
   ${isAcc ? `
-    <div class="section-title">Items</div>
+    <div class="section-title">${T2.items}</div>
     <table>
-      <thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Price (incl. VAT)</th></tr></thead>
+      <thead><tr><th>${T2.item}</th><th style="text-align:center">${T2.qty}</th><th style="text-align:right">${T2.price}</th></tr></thead>
       <tbody>${accItemRows}</tbody>
     </table>
   ` : `
-    <div class="section-title">Reported issue</div>
+    <div class="section-title">${T2.reportedIssue}</div>
     <div class="issue-box">${ticket.issue_desc || "—"}</div>
-    ${ticket.technician_notes ? `<div class="section-title">Technician notes</div><div class="issue-box">${ticket.technician_notes.replace(/\n/g,"<br/>")}</div>` : ""}
+    ${ticket.technician_notes ? `<div class="section-title">${T2.technicianNotes}</div><div class="issue-box">${ticket.technician_notes.replace(/\n/g,"<br/>")}</div>` : ""}
     ${parts.length ? `
-      <div class="section-title">Parts / Materials</div>
+      <div class="section-title">${T2.parts}</div>
       <table>
-        <thead><tr><th>Part</th><th style="text-align:center">Qty</th><th style="text-align:right">Price (incl. VAT)</th></tr></thead>
+        <thead><tr><th>${T2.part}</th><th style="text-align:center">${T2.qty}</th><th style="text-align:right">${T2.price}</th></tr></thead>
         <tbody>${partsRows}</tbody>
       </table>
     ` : ""}
@@ -359,26 +361,71 @@ function buildReceiptHtml(ticket, customer, parts, mode) {
   <div class="divider"/>
   <table style="width:220px;margin-left:auto">
     <tbody>
-      <tr class="sub-row"><td>Price excl. VAT</td><td style="text-align:right">${fmtEur(ex)}</td></tr>
-      <tr class="sub-row"><td>VAT ${(VAT_RATE*100).toFixed(1)}%</td><td style="text-align:right">${fmtEur(vat)}</td></tr>
-      <tr class="tot-row"><td>Total (incl. VAT)</td><td style="text-align:right">${fmtEur(ticket.initial_quote)}</td></tr>
+      <tr class="sub-row"><td>${T2.priceExVat}</td><td style="text-align:right">${fmtEur(ex)}</td></tr>
+      <tr class="sub-row"><td>${T2.vat} ${(VAT_RATE*100).toFixed(1)}%</td><td style="text-align:right">${fmtEur(vat)}</td></tr>
+      <tr class="tot-row"><td>${T2.total}</td><td style="text-align:right">${fmtEur(ticket.initial_quote)}</td></tr>
     </tbody>
   </table>
 
   <!-- Signature lines -->
   <div class="sig-area">
-    <div class="sig-line">Customer signature</div>
-    <div class="sig-line">Received / Technician</div>
+    <div class="sig-line">${T2.customerSig}</div>
+    <div class="sig-line">${T2.techSig}</div>
   </div>
 
-  <div class="foot">${SHOP_NAME} · ${SHOP_ADDR} · ${SHOP_TEL} · ${SHOP_EMAIL} · ${SHOP_BIZ}</div>
+  <div class="foot">${T2.thankYou} · ${SHOP_NAME} · ${SHOP_ADDR} · ${SHOP_TEL} · ${SHOP_EMAIL} · ${SHOP_BIZ}</div>
   <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),800);}<\/script>
   </body></html>`;
 }
-function printReceipt(ticket, customer, parts, mode) {
+const RECEIPT_LANGS = {
+  en: {
+    flag:"🇬🇧", label:"English",
+    repairTicket:"Repair Ticket", accessoryOrder:"Accessory Order",
+    customer:"Customer", device:"Device", forDevice:"For device",
+    reportedIssue:"Reported issue", technicianNotes:"Technician notes",
+    parts:"Parts / Materials", items:"Items",
+    serialImei:"IMEI / Serial", repairType:"Repair type",
+    warranty:"Warranty", months:"months",
+    email:"Email", phone:"Phone", notes:"Notes",
+    priceExVat:"Price excl. VAT", vat:"VAT", total:"Total (incl. VAT)",
+    customerSig:"Customer signature", techSig:"Received / Technician",
+    thankYou:"Thank you!",
+    qty:"Qty", part:"Part", item:"Item", price:"Price (incl. VAT)",
+  },
+  fi: {
+    flag:"🇫🇮", label:"Suomi",
+    repairTicket:"Korjaustyömääräys", accessoryOrder:"Lisätarviketilaus",
+    customer:"Asiakas", device:"Laite", forDevice:"Laitteelle",
+    reportedIssue:"Ilmoitettu vika", technicianNotes:"Teknikon muistiinpanot",
+    parts:"Osat / Tarvikkeet", items:"Tuotteet",
+    serialImei:"IMEI / Sarjanumero", repairType:"Korjaustyyppi",
+    warranty:"Takuu", months:"kk",
+    email:"Sähköposti", phone:"Puhelin", notes:"Lisätiedot",
+    priceExVat:"Hinta ALV 0%", vat:"ALV", total:"Yhteensä (sis. ALV)",
+    customerSig:"Asiakkaan allekirjoitus", techSig:"Vastaanotettu / Teknikko",
+    thankYou:"Kiitos asiakkuudestanne!",
+    qty:"Kpl", part:"Osa", item:"Tuote", price:"Hinta (sis. ALV)",
+  },
+  sv: {
+    flag:"🇸🇪", label:"Svenska",
+    repairTicket:"Reparationsorder", accessoryOrder:"Tillbehörsbeställning",
+    customer:"Kund", device:"Enhet", forDevice:"För enhet",
+    reportedIssue:"Rapporterat fel", technicianNotes:"Teknikeranteckningar",
+    parts:"Delar / Material", items:"Artiklar",
+    serialImei:"IMEI / Serienummer", repairType:"Reparationstyp",
+    warranty:"Garanti", months:"mån",
+    email:"E-post", phone:"Telefon", notes:"Anteckningar",
+    priceExVat:"Pris exkl. moms", vat:"Moms", total:"Totalt (inkl. moms)",
+    customerSig:"Kundens underskrift", techSig:"Mottaget / Tekniker",
+    thankYou:"Tack för ditt besök!",
+    qty:"Ant", part:"Del", item:"Artikel", price:"Pris (inkl. moms)",
+  },
+};
+
+function printReceipt(ticket, customer, parts, mode, lang="fi") {
   const w = window.open("", "_blank", mode === "thermal" ? "width=360,height=700" : "width=900,height=750");
   if (!w) { alert("Salli ponnahdusikkunat selaimessa tulostusta varten."); return; }
-  w.document.write(buildReceiptHtml(ticket, customer, parts, mode));
+  w.document.write(buildReceiptHtml(ticket, customer, parts, mode, lang));
   w.document.close();
 }
 
@@ -3105,6 +3152,7 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
   const [newPart,     setNewPart]     = useState({ part_name:"", supplier_sku:"", qty:1, cost:"", is_accessory:false });
 
   const [showPrint,   setShowPrint]   = useState(false);
+  const [printLang,   setPrintLang]   = useState("fi");
 
   const [confirmDel, setConfirmDel] = useState(false);
   if (!ticket) return <div style={{ padding:40, color:T.text2 }}>Ticket not found.</div>;
@@ -3170,20 +3218,33 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
       {showPrint && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.35)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }} onClick={() => setShowPrint(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:28, width:360, boxShadow:"0 12px 40px rgba(0,0,0,.15)" }}>
-            <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>🖨 Tulosta kuitti</div>
-            <div style={{ fontSize:12, color:T.text2, marginBottom:6 }}>Valitse kuitin muoto</div>
-            <div style={{ fontSize:11, color:T.amber, background:T.amberBg, border:`1px solid ${T.amber}33`, borderRadius:6, padding:"7px 10px", marginBottom:18 }}>
-              ⚠ Tulostus avaa erillisen ikkunan. Salli ponnahdusikkunat selaimessa.
+            <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>🖨 Print receipt</div>
+            <div style={{ fontSize:11, color:T.amber, background:T.amberBg, border:`1px solid ${T.amber}33`, borderRadius:6, padding:"7px 10px", marginBottom:16 }}>
+              ⚠ Allow pop-ups in your browser for printing.
             </div>
+
+            {/* Language */}
+            <div style={{ fontSize:11, fontWeight:600, color:T.text2, marginBottom:8 }}>Language</div>
+            <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+              {Object.entries(RECEIPT_LANGS).map(([key, l]) => (
+                <button key={key} onClick={() => setPrintLang(key)}
+                  style={{ flex:1, padding:"8px 4px", borderRadius:8, border:`2px solid ${printLang===key?T.pink:T.border}`, background:printLang===key?T.pinkBg:T.surface2, color:printLang===key?T.pink:T.text2, fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                  {l.flag} {l.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Format */}
+            <div style={{ fontSize:11, fontWeight:600, color:T.text2, marginBottom:8 }}>Format</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              {[["📄","A4 receipt","For customer / archive","a4"],["🧾","Thermal receipt","58-80mm till receipt","thermal"]].map(([ic,lab,desc,mode]) => (
-                <button key={mode} onClick={() => { printReceipt(ticket, cust, tParts, mode); setShowPrint(false); }} style={{ background:T.surface2, border:`1px solid ${T.border}`, borderRadius:8, padding:"14px 8px", color:T.text, fontSize:13, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
+              {[["📄","A4","For customer / archive","a4"],["🧾","Thermal","58-80mm till receipt","thermal"]].map(([ic,lab,desc,mode]) => (
+                <button key={mode} onClick={() => { printReceipt(ticket, cust, tParts, mode, printLang); setShowPrint(false); }} style={{ background:T.surface2, border:`1px solid ${T.border}`, borderRadius:8, padding:"14px 8px", color:T.text, fontSize:13, fontWeight:600, display:"flex", flexDirection:"column", alignItems:"center", gap:6, cursor:"pointer" }}>
                   <span style={{ fontSize:24 }}>{ic}</span><span>{lab}</span>
                   <span style={{ fontSize:10, color:T.text3 }}>{desc}</span>
                 </button>
               ))}
             </div>
-            <button onClick={() => setShowPrint(false)} style={{ marginTop:12, width:"100%", background:"transparent", border:`1px solid ${T.border}`, borderRadius:7, padding:"8px", color:T.text2, fontSize:12 }}>Peruuta</button>
+            <button onClick={() => setShowPrint(false)} style={{ marginTop:12, width:"100%", background:"transparent", border:`1px solid ${T.border}`, borderRadius:7, padding:"8px", color:T.text2, fontSize:12 }}>Cancel</button>
           </div>
         </div>
       )}
