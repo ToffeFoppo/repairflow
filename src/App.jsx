@@ -1175,6 +1175,37 @@ export default function RepairFlow() {
   }
   function openTicket(t) { setActiveTicket(t.id); setView("ticket"); }
 
+  async function reloadAll() {
+    const [
+      { data: tix },  { data: custs }, { data: ps },
+      { data: ls },   { data: techs }, { data: cat },
+      { data: cats },  { data: il },   { data: settings },
+    ] = await Promise.all([
+      supabase.from("tickets").select("*").order("created_at", { ascending: false }),
+      supabase.from("customers").select("*").order("name"),
+      supabase.from("parts").select("*"),
+      supabase.from("logs").select("*").order("created_at", { ascending: false }),
+      supabase.from("technicians").select("*"),
+      supabase.from("catalogue").select("*").order("name"),
+      supabase.from("part_categories").select("*").order("name"),
+      supabase.from("intake_logs").select("*").order("created_at", { ascending: false }),
+      supabase.from("settings").select("*"),
+    ]);
+    if (tix)   setTickets(tix);
+    if (custs) setCustomers(custs);
+    if (ps)    setParts(ps);
+    if (ls)    setLogs(ls);
+    if (techs) setTechnicians(techs);
+    if (cat)   setCatalogue(cat.map(c => ({ ...c, compatible_models: c.compatible_models||[], compatible_categories: c.compatible_categories||[] })));
+    if (cats)  setPartCategories(cats.map(c => c.name));
+    if (il)    setIntakeLogs(il);
+    if (settings) {
+      const tmplRow = settings.find(s => s.key === "msg_templates");
+      if (tmplRow?.value) setMsgTemplates({ ...DEFAULT_TEMPLATES, ...tmplRow.value });
+    }
+    toast("Data refreshed");
+  }
+
   // ── Real notification sender ─────────────────────────────────────────────
   async function sendNotification(tmplKey, cust, ticket) {
     const channels = [...(cust.email?["email"]:[]), ...(cust.sms_opt_in?["sms"]:[])];
@@ -1201,10 +1232,20 @@ export default function RepairFlow() {
         }
       } catch(e) { console.error("Send error:", e); deliveryStatus = "failed"; }
 
-      const logEntry = { id:genId("l"), ticket_id:ticket.id, customer_id:cust.id, channel:ch, template_key:tmplKey, message: ch==="email" ? `${msg.subject}\n\n${msg.body}` : msg, sent_at:new Date().toISOString(), status:deliveryStatus };
+      const logEntry = {
+        id: genId("l"),
+        ticket_id: ticket.id,
+        customer_id: cust.id,
+        channel: ch,
+        template_key: tmplKey,
+        message: ch === "email" ? `${msg.subject}\n\n${msg.body}` : msg,
+        sent_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        status: deliveryStatus
+      };
       setLogs(ls => [...ls, logEntry]);
       const { error: logErr } = await supabase.from("logs").insert(logEntry);
-      if (logErr) console.error("log insert failed:", logErr);
+      if (logErr) console.error("log insert failed:", JSON.stringify(logErr));
       results.push({ ch, status: deliveryStatus });
     }
     const icons = results.map(r => (r.ch==="email"?"📧":"📱") + (r.status==="failed"?" ❌":"")).join(" ");
@@ -1286,6 +1327,7 @@ export default function RepairFlow() {
       if (error) console.error("saveTicket insert:", error);
     },
     async saveCustomer(c) { const {error} = await supabase.from("customers").upsert(c); if(error) console.error("saveCustomer",error); },
+    async deleteCustomer(id) { const {error} = await supabase.from("customers").delete().eq("id",id); if(error) console.error("deleteCustomer",error); },
     async savePart(p)     { const {error} = await supabase.from("parts").upsert(p); if(error) console.error("savePart",error); },
     async deletePart(id)  { const {error} = await supabase.from("parts").delete().eq("id",id); if(error) console.error("deletePart",error); },
     async saveCatalogueItem(c) { const {error} = await supabase.from("catalogue").upsert(c); if(error) console.error("saveCatalogueItem",error); },
@@ -1348,6 +1390,10 @@ export default function RepairFlow() {
             <button onClick={() => setView("new_ticket")} style={{ background:T.pink, color:"#fff", border:"none", borderRadius:7, padding:"7px 18px", fontWeight:700, fontSize:13 }}>
               + New ticket
             </button>
+            <button onClick={reloadAll} title="Reload all data from server"
+              style={{ background:T.surface2, color:T.text2, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 12px", fontWeight:600, fontSize:12, cursor:"pointer" }}>
+              ↻
+            </button>
             <button onClick={() => supabase.auth.signOut()} style={{ background:T.surface2, color:T.text2, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 14px", fontWeight:600, fontSize:12 }}>
               Sign out
             </button>
@@ -1362,7 +1408,7 @@ export default function RepairFlow() {
           {view==="settings"    && <SettingsView technicians={technicians} setTechnicians={setTechnicians} toast={toast} partCategories={partCategories} setPartCategories={setPartCategories} catalogue={catalogue} setCatalogue={setCatalogue} db={db} tickets={tickets} customers={customers} parts={parts} intakeLogs={intakeLogs} logs={logs} />}
           {view==="catalogue"   && <CatalogueView catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} toast={toast} parts={parts} partCategories={partCategories} setPartCategories={setPartCategories} db={db} />}
           {view==="stock_intake" && <StockIntakeView catalogue={catalogue} setCatalogue={setCatalogue} partCategories={partCategories} intakeLogs={intakeLogs} setIntakeLogs={setIntakeLogs} toast={toast} allModels={allModels} setAllModels={setAllModels} db={db} />}
-          {view==="customers"   && <CustomersView customers={customers} setCustomers={setCustomers} tickets={tickets} openTicket={openTicket} db={db} toast={toast} />}
+          {view==="customers"   && <CustomersView customers={customers} setCustomers={setCustomers} tickets={tickets} openTicket={openTicket} db={db} toast={toast} deleteCustomer={id => { setCustomers(cs => cs.filter(c => c.id !== id)); db.deleteCustomer(id); }} />}
           {view==="new_ticket"  && <NewTicketView customers={customers} setCustomers={setCustomers} tickets={tickets} setTickets={setTickets} toast={toast} setView={setView} setActiveTicket={setActiveTicket} allModels={allModels} setAllModels={setAllModels} db={db} />}
           {view==="logs"        && <LogsView logs={logs} tickets={tickets} customers={customers} />}
         </div>
@@ -3394,7 +3440,7 @@ function TicketView({ ticketId, tickets, customers, parts, logs, setTickets, set
                     <span style={{ fontSize:16 }}>{isEmail?"📧":"📱"}</span>
                     <div>
                       <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{TMPL[l.template_key]||l.template_key}</div>
-                      <div style={{ fontSize:10, color:T.text3 }}>{fmtDate(l.sent_at, true)} · {isEmail?"Email":"SMS"}</div>
+                      <div style={{ fontSize:10, color:T.text3 }}>{fmtDate(l.sent_at||l.created_at, true)} · {isEmail?"Email":"SMS"}</div>
                     </div>
                   </div>
                   <span style={{ fontSize:10, color:T.green, fontWeight:700 }}>✓ Sent</span>
@@ -3726,7 +3772,7 @@ function PartsOrderView({ tickets, setTickets, customers, parts, setParts, updat
 }
 
 // ─── CUSTOMERS ────────────────────────────────────────────────────────────────
-function CustomersView({ customers, setCustomers, tickets, openTicket, db, toast }) {
+function CustomersView({ customers, setCustomers, tickets, openTicket, db, toast, deleteCustomer }) {
   const [q,        setQ]        = useState("");
   const [selected, setSelected] = useState(null); // customer id
   const [editing,  setEditing]  = useState(false);
@@ -3840,12 +3886,28 @@ function CustomersView({ customers, setCustomers, tickets, openTicket, db, toast
               <h2 style={{ margin:"0 0 2px", fontSize:20, fontWeight:800, color:T.text }}>{cust.name}</h2>
               <div style={{ fontSize:12, color:T.text3 }}>Customer since {cust.created_at ? new Date(cust.created_at).toLocaleDateString("fi-FI") : "—"}</div>
             </div>
+          <div style={{ display:"flex", gap:8 }}>
             {!editing && (
               <button onClick={startEdit}
                 style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:8, padding:"7px 16px", fontSize:13, fontWeight:600, color:T.text, cursor:"pointer" }}>
                 ✏ Edit
               </button>
             )}
+            {!editing && (() => {
+              const hasOpenTickets = cTickets.filter(t => t.status !== "closed").length > 0;
+              return (
+                <button onClick={() => {
+                  if (hasOpenTickets) { toast("Cannot delete — customer has open tickets", "error"); return; }
+                  if (!window.confirm(`Delete ${cust.name}? This cannot be undone.`)) return;
+                  deleteCustomer(cust.id);
+                  setSelected(null);
+                  toast(`${cust.name} deleted`, "warn");
+                }} style={{ background:T.redBg, border:`1px solid ${T.red}44`, borderRadius:8, padding:"7px 14px", fontSize:13, fontWeight:600, color:T.red, cursor:"pointer" }}>
+                  🗑 Delete
+                </button>
+              );
+            })()}
+          </div>
           </div>
 
           {/* Stats row */}
@@ -4027,9 +4089,14 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
     const fid = await resolveCustomer(); if (!fid) return;
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : (device.manufacturer || "Other");
     const finalIssue  = issue.trim() || REPAIR_TYPES.find(r=>r.value===repairType)?.label || "";
+    let tid;
     const { data: tidData, error: tidErr } = await supabase.rpc("next_ticket_id");
-    if (tidErr || !tidData) { toast("Could not generate ticket ID, please try again", "error"); return; }
-    const tid = tidData;
+    if (tidErr || !tidData) {
+      // Fallback: fetch fresh max from DB, not local state
+      const { data: maxRow } = await supabase.from("tickets").select("id").order("created_at", { ascending: false }).limit(50);
+      const maxNum = (maxRow||[]).reduce((m, t) => { const n = parseInt(t.id?.replace("TKT-",""))||0; return n>m?n:m; }, 0);
+      tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`;
+    } else { tid = tidData; }
     const nt = {
       id: tid, type: "repair",
       customer_id: fid,
@@ -4050,9 +4117,13 @@ function NewTicketView({ customers, setCustomers, tickets, setTickets, toast, se
     const model = device.model || device.customModel;
     const fid = await resolveCustomer(); if (!fid) return;
     const resolvedMfr = device.manufacturer === "__other__" ? (device.customBrand || "Other") : device.manufacturer;
+    let tid;
     const { data: tidData, error: tidErr } = await supabase.rpc("next_ticket_id");
-    if (tidErr || !tidData) { toast("Could not generate ticket ID, please try again", "error"); return; }
-    const tid = tidData;
+    if (tidErr || !tidData) {
+      const { data: maxRow } = await supabase.from("tickets").select("id").order("created_at", { ascending: false }).limit(50);
+      const maxNum = (maxRow||[]).reduce((m, t) => { const n = parseInt(t.id?.replace("TKT-",""))||0; return n>m?n:m; }, 0);
+      tid = `TKT-${String(maxNum + 1).padStart(4,"0")}`;
+    } else { tid = tidData; }
     const firstItem = { id: genId("ai"), item: accItem.trim(), color: accColor.trim(), qty: parseInt(accQty)||1, price_incl_vat: ap, status: "pending" };
     const nt = {
       id: tid, type: "accessory",
@@ -4335,7 +4406,7 @@ function LogsView({ logs, tickets, customers }) {
     { l:"Total messages", v:logs.length,                                    c:T.pink  },
     { l:"Emails",          v:logs.filter(l=>l.channel==="email").length,      c:T.blue  },
     { l:"SMS messages",          v:logs.filter(l=>l.channel==="sms").length,        c:T.green },
-    { l:"Sent today",     v:logs.filter(l=>l.sent_at?.slice(0,10)===new Date().toISOString().slice(0,10)).length, c:T.amber },
+    { l:"Sent today",     v:logs.filter(l=>(l.sent_at||l.created_at)?.slice(0,10)===new Date().toISOString().slice(0,10)).length, c:T.amber },
   ];
 
   return (
@@ -4382,8 +4453,8 @@ function LogsView({ logs, tickets, customers }) {
 
                 {/* Timestamp */}
                 <div style={{ padding:"0 12px" }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{new Date(l.sent_at).toLocaleDateString("fi-FI", { day:"numeric", month:"short", year:"numeric" })}</div>
-                  <div style={{ fontSize:11, color:T.text3 }}>{new Date(l.sent_at).toLocaleTimeString("fi-FI", { hour:"2-digit", minute:"2-digit" })}</div>
+                  <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{new Date(l.sent_at||l.created_at).toLocaleDateString("fi-FI", { day:"numeric", month:"short", year:"numeric" })}</div>
+                  <div style={{ fontSize:11, color:T.text3 }}>{new Date(l.sent_at||l.created_at).toLocaleTimeString("fi-FI", { hour:"2-digit", minute:"2-digit" })}</div>
                 </div>
 
                 {/* Customer + ticket */}
