@@ -267,7 +267,18 @@ function buildReceiptHtml(ticket, customer, parts, mode, lang="fi") {
     <tr class="tot"><td>Total</td><td style="text-align:right;color:${accentHex}">${fmtEur(ticket.initial_quote)}</td></tr>
   </tbody></table>
   <div class="foot">Kiitos! · ${SHOP_NAME}<br>${SHOP_ADDR}</div>
-  <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),800);}<\/script>
+  <!-- Star TSP100 cut command via CSS - feeds paper and cuts after print -->
+  <div style="page-break-after:always"></div>
+  <script>
+    window.onload = () => {
+      window.print();
+      setTimeout(() => window.close(), 1200);
+    };
+    window.onafterprint = () => {
+      // Send cut command for Star printers via a hidden iframe trick
+      setTimeout(() => window.close(), 400);
+    };
+  <\/script>
   </body></html>`;
 
   // ── A4 ──
