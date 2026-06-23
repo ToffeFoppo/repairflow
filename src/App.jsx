@@ -1405,8 +1405,34 @@ export default function RepairFlow() {
     return ms && mt;
   });
 
+  const isMobile = useMobile();
+
   // ── Auth gates ───────────────────────────────────────────────────────────────
   if (needsPassword) return <SetPasswordScreen />;
+
+  if (isMobile) return (
+    <div style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
+      <style>{`
+        *{box-sizing:border-box} button{cursor:pointer} input,select,textarea{outline:none;font-family:inherit}
+        ::-webkit-scrollbar{width:0px}
+      `}</style>
+      <MobileTopbar view={view} setView={setView} tickets={tickets} customers={customers} parts={parts} openTicket={openTicket} reloadAll={reloadAll} />
+      <div style={{ paddingTop:52, minHeight:"100vh" }}>
+        {view==="dashboard"    && <MobileDashboard tickets={filteredTickets} customers={customers} parts={parts} openTicket={openTicket} filterStatus={filterStatus} setFilterStatus={setFilterStatus} updateTicketStatus={updateTicketStatus} />}
+        {view==="ticket"       && <TicketView ticketId={activeTicket} tickets={tickets} customers={customers} parts={parts} logs={logs} setTickets={setTickets} setParts={setParts} updateTicketStatus={updateTicketStatus} updatePartStatus={updatePartStatus} deleteTicket={deleteTicket} toast={toast} technicians={technicians} catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} db={db} />}
+        {view==="new_ticket"   && <NewTicketView customers={customers} setCustomers={setCustomers} tickets={tickets} setTickets={setTickets} toast={toast} setView={setView} setActiveTicket={setActiveTicket} allModels={allModels} setAllModels={setAllModels} db={db} />}
+        {view==="customers"    && <CustomersView customers={customers} setCustomers={setCustomers} tickets={tickets} openTicket={openTicket} db={db} toast={toast} deleteCustomer={id => { setCustomers(cs => cs.filter(c => c.id !== id)); db.deleteCustomer(id); }} />}
+        {view==="parts_order"  && <PartsOrderView tickets={tickets} setTickets={setTickets} customers={customers} parts={parts} setParts={setParts} updatePartStatus={updatePartStatus} manualOrders={manualOrders} setManualOrders={setManualOrders} toast={toast} catalogue={catalogue} setCatalogue={setCatalogue} db={db} sendNotification={sendNotification} />}
+        {view==="logs"         && <LogsView logs={logs} tickets={tickets} customers={customers} />}
+        {view==="settings"     && <SettingsView technicians={technicians} setTechnicians={setTechnicians} toast={toast} partCategories={partCategories} setPartCategories={setPartCategories} catalogue={catalogue} setCatalogue={setCatalogue} db={db} tickets={tickets} customers={customers} parts={parts} intakeLogs={intakeLogs} logs={logs} />}
+        {view==="catalogue"    && <CatalogueView catalogue={catalogue} setCatalogue={setCatalogue} allModels={allModels} setAllModels={setAllModels} toast={toast} parts={parts} partCategories={partCategories} setPartCategories={setPartCategories} db={db} />}
+        {view==="templates"    && <TemplatesView msgTemplates={msgTemplates} setMsgTemplates={setMsgTemplates} db={db} />}
+      </div>
+      <MobileNav view={view} setView={setView} pendingCount={pendingCount} />
+      <Toast toasts={toasts} />
+    </div>
+  );
+
   if (session === undefined) return (
     <div style={{ minHeight:"100vh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'IBM Plex Sans',sans-serif" }}>
       <div style={{ fontSize:14, color:T.text3 }}>Loading…</div>
@@ -1476,7 +1502,144 @@ export default function RepairFlow() {
   );
 }
 
-// ─── GLOBAL SEARCH ────────────────────────────────────────────────────────────
+// ─── MOBILE HOOK ───────────────────────────────────────────────────────────────
+function useMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return isMobile;
+}
+
+// ─── MOBILE BOTTOM NAV ─────────────────────────────────────────────────────────
+function MobileNav({ view, setView, pendingCount }) {
+  const items = [
+    { key:"dashboard",   icon:"⊞", label:"Tickets"  },
+    { key:"customers",   icon:"◈", label:"Customers" },
+    { key:"parts_order", icon:"◎", label:"Orders", badge: pendingCount },
+    { key:"logs",        icon:"✉", label:"Messages"  },
+    { key:"settings",    icon:"⚙", label:"Settings"  },
+  ];
+  return (
+    <div style={{ position:"fixed", bottom:0, left:0, right:0, height:60, background:T.surface, borderTop:`1px solid ${T.border}`, display:"flex", zIndex:200, boxShadow:"0 -2px 10px rgba(0,0,0,.08)" }}>
+      {items.map(it => (
+        <button key={it.key} onClick={() => setView(it.key)}
+          style={{ flex:1, border:"none", background:"transparent", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2, position:"relative",
+            color: view===it.key ? T.pink : T.text3 }}>
+          <span style={{ fontSize:18, lineHeight:1 }}>{it.icon}</span>
+          <span style={{ fontSize:9, fontWeight:700, letterSpacing:".03em" }}>{it.label}</span>
+          {it.badge > 0 && (
+            <span style={{ position:"absolute", top:6, right:"calc(50% - 14px)", background:T.pink, color:"#fff", borderRadius:8, fontSize:8, fontWeight:800, padding:"1px 4px", minWidth:14, textAlign:"center" }}>{it.badge}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── MOBILE TOPBAR ─────────────────────────────────────────────────────────────
+function MobileTopbar({ view, setView, tickets, customers, parts, openTicket, reloadAll }) {
+  const [showSearch, setShowSearch] = useState(false);
+  const titles = { dashboard:"Dashboard", customers:"Customers", parts_order:"Order List", logs:"Messages", settings:"Settings", catalogue:"Inventory", stock_intake:"Stock Intake", templates:"Templates", ticket:"Ticket", new_ticket:"New Ticket" };
+  return (
+    <div style={{ position:"fixed", top:0, left:0, right:0, height:52, background:T.surface, borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 14px", zIndex:200, boxShadow:"0 1px 4px rgba(0,0,0,.07)" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        {(view==="ticket"||view==="new_ticket") && (
+          <button onClick={() => setView("dashboard")} style={{ background:"none", border:"none", color:T.pink, fontSize:20, padding:"0 4px 0 0" }}>‹</button>
+        )}
+        <div>
+          <div style={{ fontSize:13, fontWeight:800, color:T.pink, lineHeight:1 }}>Foppo</div>
+          <div style={{ fontSize:9, color:T.text3, textTransform:"uppercase", letterSpacing:".06em" }}>{titles[view]||""}</div>
+        </div>
+      </div>
+      <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+        <button onClick={() => setShowSearch(s => !s)} style={{ background:T.surface2, border:`1px solid ${T.border}`, borderRadius:8, padding:"6px 10px", fontSize:14, color:T.text2 }}>🔍</button>
+        <button onClick={() => setView("new_ticket")} style={{ background:T.pink, color:"#fff", border:"none", borderRadius:8, padding:"7px 12px", fontWeight:700, fontSize:12 }}>+ New</button>
+        <button onClick={reloadAll} style={{ background:T.surface2, border:`1px solid ${T.border}`, borderRadius:8, padding:"6px 10px", fontSize:13, color:T.text2 }}>↻</button>
+      </div>
+      {showSearch && (
+        <div style={{ position:"absolute", top:52, left:0, right:0, background:T.surface, padding:12, borderBottom:`1px solid ${T.border}`, zIndex:300 }}>
+          <GlobalSearch tickets={tickets} customers={customers} parts={parts} openTicket={(t) => { openTicket(t); setShowSearch(false); }} setView={setView} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MOBILE DASHBOARD (card list) ──────────────────────────────────────────────
+function MobileDashboard({ tickets, customers, parts, openTicket, filterStatus, setFilterStatus, updateTicketStatus }) {
+  const active  = tickets.filter(t => t.status !== "closed");
+  return (
+    <div style={{ padding:"8px 12px 80px" }}>
+      {/* Stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+        {[
+          { l:"Open",         v:active.length,                                           c:T.pink  },
+          { l:"Ready pickup", v:tickets.filter(t=>t.status==="ready_for_pickup").length, c:T.green },
+        ].map(s => (
+          <div key={s.l} style={{ background:T.surface, border:`1px solid ${T.border}`, borderTop:`3px solid ${s.c}`, borderRadius:10, padding:"12px 14px" }}>
+            <div style={{ fontSize:22, fontWeight:800, color:s.c }}>{s.v}</div>
+            <div style={{ fontSize:10, color:T.text2, marginTop:2 }}>{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Status filter chips */}
+      <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:6, marginBottom:12, scrollbarWidth:"none" }}>
+        <button onClick={() => setFilterStatus("all")}
+          style={{ flexShrink:0, background:filterStatus==="all"?T.pinkBg:T.surface, border:`1px solid ${filterStatus==="all"?T.pink:T.border}`, color:filterStatus==="all"?T.pink:T.text2, borderRadius:20, padding:"5px 12px", fontSize:11, fontWeight:700 }}>
+          All {tickets.length}
+        </button>
+        {STATUSES.map(s => {
+          const cnt = tickets.filter(t => t.status===s.key).length;
+          if (!cnt) return null;
+          return (
+            <button key={s.key} onClick={() => setFilterStatus(s.key)}
+              style={{ flexShrink:0, background:filterStatus===s.key?s.bg:T.surface, border:`1px solid ${filterStatus===s.key?s.color:T.border}`, color:filterStatus===s.key?s.color:T.text2, borderRadius:20, padding:"5px 12px", fontSize:11, fontWeight:700 }}>
+              {s.label} {cnt}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Ticket cards */}
+      {tickets.map(ticket => {
+        const cust = customers.find(c => c.id===ticket.customer_id);
+        const st   = getStatus(ticket.status);
+        const isAcc = ticket.type==="accessory";
+        return (
+          <div key={ticket.id} onClick={() => openTicket(ticket)}
+            style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:"12px 14px", marginBottom:8, boxShadow:"0 1px 3px rgba(0,0,0,.05)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                <span style={{ fontFamily:"monospace", fontSize:11, fontWeight:700, color:isAcc?T.purple:T.pink }}>{ticket.id}</span>
+                {isAcc && <span style={{ fontSize:9, color:T.purple, background:T.purpleBg, borderRadius:4, padding:"1px 5px", fontWeight:700 }}>ACC</span>}
+              </div>
+              <span style={{ fontSize:10, fontWeight:700, color:st.color, background:st.bg, border:`1px solid ${st.color}33`, borderRadius:6, padding:"2px 8px" }}>{st.label}</span>
+            </div>
+            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:2 }}>
+              {ticket.device_manufacturer} {ticket.device_model}
+            </div>
+            <div style={{ fontSize:11, color:T.text2, marginBottom:6, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {ticket.issue_desc || "—"}
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:T.text3 }}>{cust?.name}</span>
+              <span style={{ fontSize:12, fontWeight:800, color:T.pink }}>{fmtEur(ticket.initial_quote)}</span>
+            </div>
+            <div style={{ fontSize:10, color:T.text3, marginTop:4 }}>{fmtDate(ticket.created_at)}</div>
+          </div>
+        );
+      })}
+      {!tickets.length && (
+        <div style={{ textAlign:"center", padding:40, color:T.text3 }}>No tickets</div>
+      )}
+    </div>
+  );
+}
+
 function GlobalSearch({ tickets, customers, parts, openTicket, setView }) {
   const [q,       setQ]       = useState("");
   const [open,    setOpen]    = useState(false);
